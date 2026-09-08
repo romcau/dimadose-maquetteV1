@@ -33,6 +33,48 @@ export const libellesRoles: Record<Role, string> = {
   manipulateur: 'Manipulateur',
 }
 
+export const sousTitresRoles: Record<Role, string> = {
+  physicien: 'Valide les étapes, révise les verdicts, enregistre le cumul',
+  medecin: 'Valide les étapes et tranche la décision ATP / ATS',
+  manipulateur: 'Consultation en lecture seule',
+}
+
+/**
+ * Annuaire des utilisateurs. La traçabilité nomme une personne, pas un rôle :
+ * chaque action du journal porte le compte qui l'a réalisée.
+ *
+ * L'authentification elle-même relève du socle web multi-utilisateurs, listé
+ * au §4 du brief parmi les composants existants — la maquette ne conserve
+ * aucun mot de passe.
+ */
+export interface Compte {
+  /** Identifiant de connexion, unique dans l'établissement. */
+  identifiant: string
+  /** Civilité ou titre affiché dans la traçabilité. Facultatif. */
+  titre?: string
+  nom: string
+  prenom: string
+  role: Role
+  email: string
+  statut: 'actif' | 'inactif'
+}
+
+export const comptesInitiaux: Compte[] = [
+  { identifiant: 'a.korhonen', titre: 'Mme', nom: 'Korhonen', prenom: 'Aino',    role: 'physicien',    email: 'a.korhonen@chu.fr', statut: 'actif' },
+  { identifiant: 'l.fontaine', titre: 'Dr',  nom: 'Fontaine', prenom: 'Laurent', role: 'medecin',      email: 'l.fontaine@chu.fr', statut: 'actif' },
+  { identifiant: 's.marchand', titre: 'Dr',  nom: 'Marchand', prenom: 'Sophie',  role: 'medecin',      email: 's.marchand@chu.fr', statut: 'actif' },
+  { identifiant: 'm.dupas',    titre: 'M.',  nom: 'Dupas',    prenom: 'Marc',    role: 'physicien',    email: 'm.dupas@chu.fr',    statut: 'actif' },
+  { identifiant: 't.perrin',   titre: 'M.',  nom: 'Perrin',   prenom: 'Théo',    role: 'manipulateur', email: 't.perrin@chu.fr',   statut: 'actif' },
+  { identifiant: 'e.girard',   titre: 'Mme', nom: 'Girard',   prenom: 'Élise',   role: 'physicien',    email: 'e.girard@chu.fr',   statut: 'inactif' },
+]
+
+/** Nom porté par le journal de traçabilité et l'en-tête. */
+export const nomAffiche = (c: Compte): string =>
+  c.titre ? `${c.titre} ${c.nom}` : `${c.prenom} ${c.nom}`
+
+export const compteParIdentifiant = (comptes: Compte[], identifiant: string): Compte | undefined =>
+  comptes.find(c => c.identifiant.trim().toLowerCase() === identifiant.trim().toLowerCase())
+
 /** Images candidates comme référentiel de sommation (IRMref). */
 export const referentielsDisponibles = [
   { id: 'irmp', label: 'IRMp — IRM de planification', sub: 'Référentiel standard' },
