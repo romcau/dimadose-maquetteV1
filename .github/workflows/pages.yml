@@ -1,0 +1,70 @@
+# Construit la maquette et la publie sur GitHub Pages à chaque push sur main.
+#
+# À activer une fois dans le dépôt : Settings → Pages → Build and deployment →
+# Source : « GitHub Actions ».
+#
+# Note : sur un dépôt privé, GitHub Pages demande un plan payant (Pro, Team ou
+# Enterprise). Sur le plan gratuit, ce workflow construira le projet mais le
+# déploiement échouera jusqu'à ce que le dépôt soit rendu public ou le plan mis
+# à niveau.
+
+name: Publier la maquette sur Pages
+
+on:
+  push:
+    branches: [main]
+  # Permet de relancer la publication à la main depuis l'onglet Actions.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Une seule publication à la fois ; on ne coupe pas celle en cours.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Vérifier les types
+        run: pnpm exec tsc --noEmit
+
+      # `--base ./` produit des chemins relatifs : la maquette fonctionne aussi
+      # bien à la racine d'un domaine que dans le sous-chemin d'un dépôt Pages,
+      # sans avoir à inscrire le nom du dépôt ici.
+      - name: Construire
+        run: pnpm exec vite build --base ./
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
