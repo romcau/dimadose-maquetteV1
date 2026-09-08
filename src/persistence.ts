@@ -114,3 +114,32 @@ export function effacerListePatients(): void {
     /* idem */
   }
 }
+
+// ─── Annuaire des comptes ────────────────────────────────────────────────────
+
+const CLE_COMPTES = `${PREFIXE}:v${VERSION}:comptes`
+
+/**
+ * Les comptes créés depuis l'écran de connexion doivent survivre au
+ * rechargement, sinon la personne ne peut plus se reconnecter.
+ * Aucun mot de passe n'est enregistré : l'authentification relève du socle
+ * multi-utilisateurs existant.
+ */
+export function chargerComptes<T>(): T[] | null {
+  try {
+    const brut = window.localStorage.getItem(CLE_COMPTES)
+    if (!brut) return null
+    const liste = JSON.parse(brut) as unknown
+    return Array.isArray(liste) && liste.length > 0 ? (liste as T[]) : null
+  } catch {
+    return null
+  }
+}
+
+export function sauvegarderComptes(comptes: unknown[]): void {
+  try {
+    window.localStorage.setItem(CLE_COMPTES, JSON.stringify(comptes))
+  } catch {
+    /* stockage indisponible : l'annuaire ne vit que le temps de la session */
+  }
+}

@@ -2,6 +2,7 @@ import { useState, type Dispatch, type ReactNode, type SetStateAction } from 're
 import DicomRecap from './DicomRecap'
 import SessionRecap from './SessionRecap'
 import { DossierProvider, alertesPourDossier } from '../store'
+import { libellesRoles, nomAffiche, type Compte, type Role } from '../data'
 import { effacer as effacerDossierEnregistre, effacerListePatients } from '../persistence'
 
 /**
@@ -192,6 +193,9 @@ const emptyForm: AddPatientForm = {
 interface Props {
   patients: PatientRecord[]
   setPatients: Dispatch<SetStateAction<PatientRecord[]>>
+  /** Annuaire partagé avec l'écran de connexion. */
+  comptes: Compte[]
+  setComptes: Dispatch<SetStateAction<Compte[]>>
   onSelectPatient: (p: PatientRecord) => void
   userName: string
   userRole: string
@@ -201,19 +205,10 @@ interface Props {
 
 type NavPage = 'dashboard' | 'guide' | 'utilisateurs'
 
-const mockUsers = [
-  { nom: 'Korhonen', prenom: 'Aino',    role: 'Physicien médical',  statut: 'actif',    email: 'a.korhonen@chu.fr' },
-  { nom: 'Fontaine', prenom: 'Laurent', role: 'Radiothérapeute',    statut: 'actif',    email: 'l.fontaine@chu.fr' },
-  { nom: 'Marchand', prenom: 'Sophie',  role: 'Radiothérapeute',    statut: 'actif',    email: 's.marchand@chu.fr' },
-  { nom: 'Dupas',    prenom: 'Marc',    role: 'Physicien médical',  statut: 'actif',    email: 'm.dupas@chu.fr' },
-  { nom: 'Perrin',   prenom: 'Théo',   role: 'Manipulateur',       statut: 'actif',    email: 't.perrin@chu.fr' },
-  { nom: 'Girard',   prenom: 'Élise',  role: 'Physicien médical',  statut: 'inactif',  email: 'e.girard@chu.fr' },
-]
-
-const roleColors: Record<string, string> = {
-  'Physicien médical': 'bg-clinical-light text-clinical border border-clinical-border',
-  'Radiothérapeute':   'bg-blue-50 text-blue-700 border border-blue-200',
-  'Manipulateur':      'bg-slate-100 text-slate-600 border border-slate-200',
+const roleColors: Record<Role, string> = {
+  physicien:    'bg-clinical-light text-clinical border border-clinical-border',
+  medecin:      'bg-blue-50 text-blue-700 border border-blue-200',
+  manipulateur: 'bg-slate-100 text-slate-600 border border-slate-200',
 }
 
 function GuidePage() {
@@ -287,47 +282,80 @@ function GuidePage() {
   )
 }
 
-type UserRecord = { nom: string; prenom: string; role: string; statut: string; email: string }
-const emptyUser: UserRecord = { nom: '', prenom: '', role: 'Physicien médical', statut: 'actif', email: '' }
-const availableRoles = ['Physicien médical', 'Radiothérapeute', 'Manipulateur']
+const compteVide: Compte = {
+  identifiant: '',
+  titre: '',
+  nom: '',
+  prenom: '',
+  role: 'physicien',
+  email: '',
+  statut: 'actif',
+}
 
-function UsersPage({ readOnly = false }: { readOnly?: boolean }) {
-  const [users, setUsers] = useState<UserRecord[]>(mockUsers.map(u => ({ ...u })))
+interface UsersPageProps {
+  comptes: Compte[]
+  setComptes: Dispatch<SetStateAction<Compte[]>>
+  readOnly?: boolean
+}
+
+/**
+ * Annuaire du service. C'est la même liste que celle de l'écran de connexion :
+ * désactiver un compte ici empêche la connexion, et un compte créé à la
+ * connexion apparaît ici.
+ */
+function UsersPage({ comptes, setComptes, readOnly = false }: UsersPageProps) {
   const [modal, setModal] = useState<{ open: boolean; idx: number | null }>({ open: false, idx: null })
-  const [form, setForm] = useState<UserRecord>(emptyUser)
+  const [form, setForm] = useState<Compte>(compteVide)
   const [err, setErr] = useState('')
 
-  function openAdd() { setForm({ ...emptyUser }); setErr(''); setModal({ open: true, idx: null }) }
-  function openEdit(i: number) { setForm({ ...users[i] }); setErr(''); setModal({ open: true, idx: i }) }
+  function openAdd() { setForm({ ...compteVide }); setErr(''); setModal({ open: true, idx: null }) }
+  function openEdit(i: number) { setForm({ ...comptes[i] }); setErr(''); setModal({ open: true, idx: i }) }
   function closeModal() { setModal({ open: false, idx: null }) }
 
   function handleSave() {
-    if (!form.nom.trim() || !form.prenom.trim() || !form.email.trim()) {
-      setErr('Nom, prénom et email sont obligatoires.')
+    if (!form.nom.trim() || !form.prenom.trim() || !form.identifiant.trim()) {
+      setErr('Nom, prénom et identifiant sont obligatoires.')
       return
     }
+    const identifiant = form.identifiant.trim().toLowerCase()
+    const doublon = comptes.some((c, i) => i !== modal.idx && c.identifiant.toLowerCase() === identifiant)
+    if (doublon) {
+      setErr('Cet identifiant est déjà utilisé par un autre compte.')
+      return
+    }
+    const compte: Compte = {
+      ...form,
+      identifiant,
+      titre: form.titre?.trim() || undefined,
+      nom: form.nom.trim(),
+      prenom: form.prenom.trim(),
+      email: form.email.trim() || `${identifiant}@chu.fr`,
+    }
     if (modal.idx === null) {
-      setUsers(prev => [...prev, { ...form }])
+      setComptes(prev => [...prev, compte])
     } else {
-      setUsers(prev => prev.map((u, i) => i === modal.idx ? { ...form } : u))
+      setComptes(prev => prev.map((c, i) => (i === modal.idx ? compte : c)))
     }
     closeModal()
   }
 
   function toggleStatut(i: number) {
-    setUsers(prev => prev.map((u, idx) =>
-      idx === i ? { ...u, statut: u.statut === 'actif' ? 'inactif' : 'actif' } : u
+    setComptes(prev => prev.map((c, idx) =>
+      idx === i ? { ...c, statut: c.statut === 'actif' ? 'inactif' : 'actif' } : c
     ))
   }
 
-  const actifs = users.filter(u => u.statut === 'actif').length
+  const actifs = comptes.filter(c => c.statut === 'actif').length
 
   return (
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="text-2xl font-bold text-slate-800">Gestion des utilisateurs</div>
-          <div className="text-sm text-slate-400 mt-1">{actifs} utilisateur{actifs > 1 ? 's' : ''} actif{actifs > 1 ? 's' : ''}</div>
+          <div className="text-sm text-slate-400 mt-1">
+            {actifs} compte{actifs > 1 ? 's' : ''} actif{actifs > 1 ? 's' : ''} sur {comptes.length}
+            {' · '}les actions du journal de traçabilité portent ces noms
+          </div>
         </div>
         {!readOnly && (
           <button
@@ -346,34 +374,39 @@ function UsersPage({ readOnly = false }: { readOnly?: boolean }) {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/70">
-              {['Utilisateur', 'Rôle', 'Email', 'Statut', ''].map((h, i) => (
+              {['Utilisateur', 'Identifiant', 'Rôle', 'Email', 'Statut', ''].map((h, i) => (
                 <th key={i} className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {users.map((u, i) => (
-              <tr key={i} className="border-b border-slate-50 hover:bg-clinical-light/30 transition-colors group">
+            {comptes.map((c, i) => (
+              <tr key={c.identifiant || i} className="border-b border-slate-50 hover:bg-clinical-light/30 transition-colors group">
                 <td className="px-5 py-3.5">
-                  <div className="font-semibold text-slate-800">{u.nom} {u.prenom}</div>
+                  <div className="font-semibold text-slate-800">{c.nom} {c.prenom}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    Traçabilité : <span className="font-medium text-slate-500">{nomAffiche(c)}</span>
+                  </div>
                 </td>
+                <td className="px-5 py-3.5 text-xs text-slate-600 font-mono">{c.identifiant}</td>
                 <td className="px-5 py-3.5">
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${roleColors[u.role] ?? 'bg-slate-100 text-slate-500'}`}>
-                    {u.role}
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${roleColors[c.role]}`}>
+                    {libellesRoles[c.role]}
                   </span>
                 </td>
-                <td className="px-5 py-3.5 text-xs text-slate-500 font-mono">{u.email}</td>
+                <td className="px-5 py-3.5 text-xs text-slate-500 font-mono">{c.email}</td>
                 <td className="px-5 py-3.5">
                   <button
                     onClick={() => !readOnly && toggleStatut(i)}
                     disabled={readOnly}
+                    title={c.statut === 'actif' ? 'Désactiver — le compte ne pourra plus se connecter' : 'Réactiver le compte'}
                     className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${readOnly ? 'cursor-default' : 'cursor-pointer'} ${
-                      u.statut === 'actif'
+                      c.statut === 'actif'
                         ? `bg-ok-bg text-ok-text border border-ok-border ${readOnly ? '' : 'hover:bg-ok-border'}`
                         : `bg-slate-100 text-slate-400 border border-slate-200 ${readOnly ? '' : 'hover:bg-slate-200'}`
                     }`}
                   >
-                    {u.statut === 'actif' ? 'Actif' : 'Inactif'}
+                    {c.statut === 'actif' ? 'Actif' : 'Inactif'}
                   </button>
                 </td>
                 <td className="px-5 py-3.5 text-right">
@@ -390,19 +423,31 @@ function UsersPage({ readOnly = false }: { readOnly?: boolean }) {
             ))}
           </tbody>
         </table>
+        <div className="px-5 py-3 border-t border-slate-100 text-xs text-slate-400">
+          Le socle web multi-utilisateurs est un composant existant : cet annuaire sert la
+          traçabilité, la maquette ne gère pas les mots de passe.
+        </div>
       </div>
 
-      {/* Add / Edit modal */}
       {modal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative bg-white rounded-3xl w-full max-w-md mx-4 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-app-sidebar/60 backdrop-blur-sm" onClick={closeModal} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-md">
             <div className="text-lg font-bold text-slate-800 mb-5">
               {modal.idx === null ? 'Nouvel utilisateur' : "Modifier l'utilisateur"}
             </div>
 
             <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-[80px_1fr_1fr] gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Titre</label>
+                  <input
+                    value={form.titre ?? ''}
+                    onChange={e => setForm(f => ({ ...f, titre: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-clinical focus:ring-1 focus:ring-clinical/30 outline-none"
+                    placeholder="Dr"
+                  />
+                </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 mb-1 block">Nom</label>
                   <input
@@ -423,26 +468,42 @@ function UsersPage({ readOnly = false }: { readOnly?: boolean }) {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-500 mb-1 block">Email</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-clinical focus:ring-1 focus:ring-clinical/30 outline-none"
-                  placeholder="m.dupont@chu.fr"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Identifiant</label>
+                  <input
+                    value={form.identifiant}
+                    onChange={e => setForm(f => ({ ...f, identifiant: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-clinical focus:ring-1 focus:ring-clinical/30 outline-none font-mono"
+                    placeholder="m.dupont"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Email</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-clinical focus:ring-1 focus:ring-clinical/30 outline-none"
+                    placeholder="m.dupont@chu.fr"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Rôle</label>
                 <select
                   value={form.role}
-                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value as Role }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:border-clinical focus:ring-1 focus:ring-clinical/30 outline-none bg-white"
                 >
-                  {availableRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                  {(['physicien', 'medecin', 'manipulateur'] as Role[]).map(r => (
+                    <option key={r} value={r}>{libellesRoles[r]}</option>
+                  ))}
                 </select>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Le rôle fixe les droits : seul le radiothérapeute tranche la décision ATP / ATS.
+                </p>
               </div>
 
               <div>
@@ -469,10 +530,10 @@ function UsersPage({ readOnly = false }: { readOnly?: boolean }) {
               {err && <div className="text-xs text-danger font-medium">{err}</div>}
             </div>
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={closeModal}
-                className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors"
+                className="px-5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors"
               >
                 Annuler
               </button>
@@ -526,6 +587,8 @@ const navItems: { id: NavPage; label: string; sub: string; icon: ReactNode }[] =
 export default function Dashboard({
   patients,
   setPatients,
+  comptes,
+  setComptes,
   onSelectPatient,
   userName,
   userRole,
@@ -743,7 +806,7 @@ export default function Dashboard({
         {/* ── Main content ── */}
         <div className="flex-1 overflow-y-auto">
           {navPage === 'guide'       && <GuidePage />}
-          {navPage === 'utilisateurs' && <UsersPage readOnly={readOnly} />}
+          {navPage === 'utilisateurs' && <UsersPage comptes={comptes} setComptes={setComptes} readOnly={readOnly} />}
           {navPage === 'dashboard'   && (
       <main className="p-6 flex flex-col gap-5">
 

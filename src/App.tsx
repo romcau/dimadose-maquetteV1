@@ -11,9 +11,14 @@ import StepValidateBar from './components/StepValidateBar'
 import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
 import DicomRecap from './components/DicomRecap'
 import { DossierProvider, useDossier } from './store'
-import { libellesRoles, type Role, type Voie } from './data'
+import { comptesInitiaux, libellesRoles, type Compte, type Role, type Voie } from './data'
 import { etatApresSeance, formatDateCourte, formatHorodatage } from './logic'
-import { chargerListePatients, sauvegarderListePatients } from './persistence'
+import {
+  chargerComptes,
+  chargerListePatients,
+  sauvegarderComptes,
+  sauvegarderListePatients,
+} from './persistence'
 
 type AppView = 'login' | 'dashboard' | 'patient'
 interface User { name: string; role: Role }
@@ -44,7 +49,14 @@ export default function App() {
   )
   const [patientId, setPatientId] = useState<string | null>(null)
 
+  // Annuaire des comptes : la tracabilite nomme une personne, donc l'annuaire
+  // doit survivre au rechargement comme la liste des patients.
+  const [comptes, setComptes] = useState<Compte[]>(
+    () => chargerComptes<Compte>() ?? comptesInitiaux,
+  )
+
   useEffect(() => { sauvegarderListePatients(patients) }, [patients])
+  useEffect(() => { sauvegarderComptes(comptes) }, [comptes])
 
   const patient = patients.find(p => p.id === patientId) ?? null
 
@@ -59,7 +71,13 @@ export default function App() {
   }
 
   if (view === 'login' || !user) {
-    return <LoginScreen onLogin={u => { setUser(u); setView('dashboard') }} />
+    return (
+      <LoginScreen
+        comptes={comptes}
+        onCreerCompte={compte => setComptes(prev => [...prev, compte])}
+        onLogin={u => { setUser(u); setView('dashboard') }}
+      />
+    )
   }
 
   if (view === 'dashboard' || !patient) {
@@ -67,6 +85,8 @@ export default function App() {
       <Dashboard
         patients={patients}
         setPatients={setPatients}
+        comptes={comptes}
+        setComptes={setComptes}
         onSelectPatient={handleSelectPatient}
         userName={user.name}
         userRole={libellesRoles[user.role]}
