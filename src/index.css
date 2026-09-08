@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-family-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Clinical workflow colors — teal theme */
+  --color-clinical: #04b8c5;
+  --color-clinical-mid: #0399a6;
+  --color-clinical-light: #eafbfc;
+  --color-clinical-border: #9ae5ea;
+
+  --color-gating: #b34728;
+  --color-gating-light: #fde8dc;
+  --color-gating-border: #f0c4ac;
+
+  /* App background */
+  --color-app-bg: #e5f8f9;
+  --color-app-sidebar: #0b2a2c;
+
+  /* Status semantics */
+  --color-ok: #16a34a;
+  --color-ok-bg: #f0fdf4;
+  --color-ok-border: #bbf7d0;
+  --color-ok-text: #14532d;
+
+  --color-warn: #d97706;
+  --color-warn-bg: #fffbeb;
+  --color-warn-border: #fde68a;
+  --color-warn-text: #78350f;
+
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-danger-text: #7f1d1d;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+:focus-visible { outline: 2px solid #04b8c5; outline-offset: 1px; }
+button:focus:not(:focus-visible), input:focus:not(:focus-visible) { outline: none; }
