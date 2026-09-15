@@ -1194,20 +1194,196 @@ export const labelEtatObjet: Record<EtatObjet, { court: string; long: string; ni
   absent: { court: '—', long: 'Absent', niveau: 'neutral' },
 }
 
+// ─── Les quatre moments et leur place dans le temps ──────────────────────────
+
+export type MomentId = 'moment-A' | 'moment-B' | 'moment-C' | 'moment-D'
+
+export interface DescriptionMoment {
+  id: MomentId
+  tag: string
+  label: string
+  /** Où ce moment se situe dans le déroulement du traitement (§3 du brief). */
+  quand: string
+  /** À quoi il sert, en une phrase. */
+  role: string
+  /** Où le trouver dans l'interface. */
+  acces: string
+}
+
+/**
+ * Description de référence des quatre moments. Une seule source : la barre
+ * latérale et le guide d'utilisation la partagent, ils ne peuvent donc plus
+ * décrire des accès différents.
+ */
+export const MOMENTS: DescriptionMoment[] = [
+  {
+    id: 'moment-A',
+    tag: 'A',
+    label: 'Validation inter-séance',
+    quand: 'Après la séance, hors ligne',
+    role: "Vérifier la qualité de l'IRM, l'ampleur de la déformation et la dose retenue, "
+      + 'puis valider le cumul. Sans contrainte de temps.',
+    acces: 'Barre latérale « Aide à la décision », ou « Récap de la séance » en fin de workflow',
+  },
+  {
+    id: 'moment-B',
+    tag: 'B',
+    label: 'Recommandation ATP / ATS',
+    quand: 'En séance, avant l’adaptation',
+    role: "Lire en moins de 30 secondes la voie recommandée et ce qui la motive, puis trancher. "
+      + 'Aucun contour du jour n’existe encore à cet instant.',
+    acces: 'Barre latérale « Aide à la décision », ou « Analyse complète » à l’étape 2',
+  },
+  {
+    id: 'moment-C',
+    tag: 'C',
+    label: 'Contraintes d’optimisation',
+    quand: 'Juste après, si ATS a été retenu',
+    role: 'Obtenir le jeu de contraintes proposé pour la réoptimisation, le corriger si besoin, '
+      + 'puis le recopier dans le TPS.',
+    acces: 'Barre latérale « Aide à la décision », ou « Détail et export » à l’étape 3',
+  },
+  {
+    id: 'moment-D',
+    tag: 'D',
+    label: 'Rapport de traitement',
+    quand: 'Fin de traitement',
+    role: 'Consulter la synthèse du traitement réalisé, les événements notables et le journal '
+      + 'de traçabilité, puis exporter.',
+    acces: 'Barre latérale « Aide à la décision », ou menu utilisateur',
+  },
+]
+
+export interface EtatMoment extends DescriptionMoment {
+  /** Ce qu'il reste à y faire, aujourd'hui. */
+  etat: string
+  niveau: Niveau
+}
+
+/**
+ * Les quatre moments ne sont pas des onglets : ce sont quatre instants
+ * différents, avec des contraintes de temps opposées (§3). Les situer et dire
+ * ce qui s'y joue évite de tomber dessus par hasard.
+ */
+export function etatsMoments(
+  seances: SeanceEvaluee[],
+  recommandation: Recommandation,
+  seanceCourante: number,
+  nbSeances: number = dossier.nbSeances,
+): EtatMoment[] {
+  const realisees = seances.filter(s => s.realisee)
+  const aValider = realisees.filter(s => !s.validee)
+  const voie = seances.find(s => s.numero === seanceCourante)?.voie ?? null
+  const decrire = (id: MomentId) => MOMENTS.find(m => m.id === id)!
+
+  return [
+    {
+      ...decrire('moment-A'),
+      etat: realisees.length === 0
+        ? 'Aucune séance à évaluer'
+        : aValider.length > 0
+          ? `${aValider.length} séance(s) à valider — S${aValider.map(s => s.numero).join(', S')}`
+          : 'Toutes les séances sont validées',
+      niveau: aValider.length > 0 ? 'warn' : realisees.length === 0 ? 'neutral' : 'ok',
+    },
+    {
+      ...decrire('moment-B'),
+      etat: voie
+        ? `${voie} retenu pour la séance ${seanceCourante}`
+        : `Décision à prendre — ${recommandation.voie} recommandé`,
+      niveau: voie ? 'ok' : 'warn',
+    },
+    {
+      ...decrire('moment-C'),
+      etat: voie === 'ATS'
+        ? 'Jeu de contraintes proposé pour la réoptimisation'
+        : voie === 'ATP'
+          ? 'Sans objet — le plan de référence est appliqué tel quel'
+          : 'En attente de la décision du jour',
+      niveau: voie === 'ATS' ? 'ok' : 'neutral',
+    },
+    {
+      ...decrire('moment-D'),
+      etat: realisees.length >= nbSeances
+        ? 'Rapport définitif'
+        : `Provisoire — ${realisees.length} séance(s) sur ${nbSeances}`,
+      niveau: realisees.length >= nbSeances ? 'ok' : 'neutral',
+    },
+  ]
+}
+
+// ─── Référentiel de sommation (IRMref) ───────────────────────────────────────
+
+export interface OptionReferentiel {
+  id: string
+  label: string
+  sub: string
+}
+
+export const REFERENTIEL_PAR_DEFAUT = 'irmp'
+
+/** Libellé d'un référentiel, déduit de son identifiant. */
+export function labelReferentiel(id: string): string {
+  if (id === REFERENTIEL_PAR_DEFAUT) return 'IRMp — IRM de planification'
+  const m = /^irmj-(\d+)$/.exec(id)
+  return m ? `IRMj — séance ${m[1]}` : id
+}
+
+/**
+ * Images pouvant servir de référentiel à la séance `seanceCourante`.
+ *
+ * §6 du brief : « l'utilisateur peut désigner l'image d'une autre séance comme
+ * référence, typiquement J1 comme référence pour J2 ». La liste suit donc les
+ * séances réellement réalisées, au lieu d'être figée.
+ */
+export function referentielsPossibles(
+  seances: SeanceEvaluee[],
+  seanceCourante: number,
+): OptionReferentiel[] {
+  const options: OptionReferentiel[] = [{
+    id: REFERENTIEL_PAR_DEFAUT,
+    label: labelReferentiel(REFERENTIEL_PAR_DEFAUT),
+    sub: 'Référentiel standard du protocole',
+  }]
+
+  for (const s of seances) {
+    if (!s.realisee || s.numero >= seanceCourante) continue
+    const id = `irmj-${s.numero}`
+    options.push({
+      id,
+      label: labelReferentiel(id),
+      sub: `Image acquise le ${formatDateCourte(s.mesures.date)}`
+        + (s.numero === 1 ? ' — cas typique si la planification préalable disparaît' : ''),
+    })
+  }
+
+  return options
+}
+
 // ─── Journal de traçabilité ──────────────────────────────────────────────────
 
 export type CategorieTrace =
+  | 'etape'
+  | 'voie'
   | 'verdict'
   | 'sommation'
   | 'dose'
   | 'validation'
   | 'reacquisition'
-  | 'voie'
   | 'contrainte'
-  | 'export'
   | 'referentiel'
   | 'critere'
   | 'seance'
+  | 'export'
+
+/**
+ * Rang d'une action dans le journal.
+ *
+ * Le journal n'est pas un historique de navigation : il enregistre des actes.
+ * Les trois rangs permettent de lire d'abord ce qui engage l'équipe, sans
+ * perdre le reste.
+ */
+export type RangTrace = 'decision' | 'verification' | 'parametre'
 
 /**
  * Une action humaine enregistrée. Le brief exige la trace des décisions
@@ -1228,31 +1404,77 @@ export interface EntreeTrace {
 }
 
 export const labelCategorieTrace: Record<CategorieTrace, string> = {
-  verdict: 'Verdict',
-  sommation: 'Sommation',
-  dose: 'Dose retenue',
-  validation: 'Validation',
-  reacquisition: 'Acquisition',
+  etape: "Validation d'étape",
   voie: 'Décision ATP / ATS',
+  verdict: 'Révision de verdict',
+  sommation: 'Mode de sommation',
+  dose: 'Dose retenue',
+  validation: 'Validation du cumul',
+  reacquisition: 'Nouvelle acquisition',
   contrainte: 'Contrainte',
-  export: 'Export',
   referentiel: 'Référentiel',
-  critere: 'Critère',
+  critere: 'Critère de comparaison',
   seance: 'Séance',
+  export: 'Export',
 }
 
 export const niveauCategorieTrace: Record<CategorieTrace, Niveau> = {
+  etape: 'ok',
+  voie: 'warn',
   verdict: 'warn',
   sommation: 'warn',
   dose: 'neutral',
   validation: 'ok',
   reacquisition: 'danger',
-  voie: 'warn',
   contrainte: 'neutral',
-  export: 'neutral',
   referentiel: 'neutral',
   critere: 'neutral',
   seance: 'neutral',
+  export: 'neutral',
+}
+
+/**
+ * Ce qui engage l'équipe (une voie retenue, un verdict révisé, une étape
+ * validée) se lit avant les réglages d'analyse.
+ */
+export const rangCategorieTrace: Record<CategorieTrace, RangTrace> = {
+  voie: 'decision',
+  verdict: 'decision',
+  sommation: 'decision',
+  reacquisition: 'decision',
+  etape: 'verification',
+  validation: 'verification',
+  seance: 'verification',
+  dose: 'verification',
+  contrainte: 'parametre',
+  referentiel: 'parametre',
+  critere: 'parametre',
+  export: 'parametre',
+}
+
+export const labelRangTrace: Record<RangTrace, string> = {
+  decision: 'Décisions',
+  verification: 'Validations',
+  parametre: 'Réglages et exports',
+}
+
+/** Regroupe le journal par séance, séance du jour en premier. */
+export function grouperTraceParSeance(
+  trace: EntreeTrace[],
+): { seance: number | null; entrees: EntreeTrace[] }[] {
+  const groupes = new Map<number | null, EntreeTrace[]>()
+  for (const e of trace) {
+    const liste = groupes.get(e.seance)
+    if (liste) liste.push(e)
+    else groupes.set(e.seance, [e])
+  }
+  return [...groupes.entries()]
+    .map(([seance, entrees]) => ({ seance, entrees }))
+    .sort((a, b) => {
+      if (a.seance === null) return 1
+      if (b.seance === null) return -1
+      return b.seance - a.seance
+    })
 }
 
 /** « 2026-08-30 » → « 30 août 2026 ». Rend la chaîne telle quelle si non datée. */
@@ -1276,6 +1498,7 @@ export function exporterTrace(trace: EntreeTrace[], entete: string[]): string {
     [
       formatHorodatage(e.horodatage),
       e.seance === null ? 'dossier' : `S${e.seance}`,
+      labelRangTrace[rangCategorieTrace[e.categorie]],
       labelCategorieTrace[e.categorie],
       e.libelle,
       e.detail ?? '',

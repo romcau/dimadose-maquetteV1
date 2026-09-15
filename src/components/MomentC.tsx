@@ -61,6 +61,10 @@ export default function MomentC() {
     navigator.clipboard.writeText(texteExport()).then(() => {
       setCopie(true)
       setTimeout(() => setCopie(false), 2000)
+      d.tracerExport(
+        `Jeu de contraintes de la séance ${n} copié`,
+        'Destiné à une ressaisie manuelle dans le TPS Monaco.',
+      )
     })
   }
 
@@ -74,6 +78,10 @@ export default function MomentC() {
     URL.revokeObjectURL(url)
     setExporte(true)
     setTimeout(() => setExporte(false), 2000)
+    d.tracerExport(
+      `Jeu de contraintes de la séance ${n} exporté (.txt)`,
+      'Destiné à une ressaisie manuelle dans le TPS Monaco.',
+    )
   }
 
   // ── Indicateurs de tête, dérivés du cumul ──

@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
+import { type MomentId } from '../logic'
 import MomentA from './MomentA'
 import MomentB from './MomentB'
 import MomentC from './MomentC'
 import MomentD from './MomentD'
 
-export type MomentId = 'moment-A' | 'moment-B' | 'moment-C' | 'moment-D'
+export type { MomentId } from '../logic'
 
 export const momentMeta: Record<MomentId, { label: string; sub: string; tag: string }> = {
   'moment-A': { label: 'Validation inter-séance',  sub: 'Qualité · Déformation · Dose cumulée',  tag: 'A' },
