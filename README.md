@@ -85,9 +85,9 @@ Pour faire relire la maquette, construire et diffuser le résultat :
 pnpm run build   # produit dist/ : un index.html, un .css, un .js, rien d'autre
 ```
 
-- **Fichier autonome.** `dist/` peut être replié en un seul `.html` (~500 ko) qui s'ouvre
-  hors ligne, sans serveur. C'est la voie qui ne fait sortir la maquette d'aucun réseau
-  interne.
+- **Fichier autonome.** `pnpm run fichier-unique` replie `dist/` en un seul `.html` (~490 ko)
+  qui s'ouvre hors ligne, sans serveur. C'est la voie qui ne fait sortir la maquette d'aucun
+  réseau interne. Le nom du fichier porte la version.
 - **Lien restreint.** Si un lien est nécessaire, héberger `dist/` derrière une
   authentification limitée au domaine de l'établissement (Azure Static Web Apps avec Entra
   ID, ou Cloudflare Pages avec Access). Ne jamais héberger sans contrôle d'accès.
