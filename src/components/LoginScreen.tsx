@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { versionCourte, versionDetaillee } from '../version'
 import {
   compteParIdentifiant,
   libellesRoles,
@@ -377,6 +378,9 @@ export default function LoginScreen({ comptes, onCreerCompte, onLogin }: Props) 
 
         <p className="text-center text-xs text-slate-400 mt-6">
           Centre Hospitalier · Service de Radiothérapie · Usage interne uniquement
+        </p>
+        <p className="text-center text-xs text-slate-300 mt-1 font-mono cursor-help" title={versionDetaillee()}>
+          {versionCourte()}
         </p>
       </div>
     </div>
