@@ -79,18 +79,38 @@ construit depuis un dépôt privé — seul GitHub Enterprise Cloud sait en rest
 Tant qu'un tel workflow existe, rendre le dépôt public une seule fois suffit à publier la
 maquette au push suivant.
 
-Pour faire relire la maquette, construire et diffuser le résultat :
+Le code vit donc sur GitHub, et la relecture passe par un fichier autonome produit à chaque
+version. Les deux se rejoignent par le numéro de version affiché en pied d'écran.
+
+### Livrer une version à relire
+
+Une fois le travail fusionné sur `main` :
 
 ```bash
-pnpm run build   # produit dist/ : un index.html, un .css, un .js, rien d'autre
+git checkout main && git pull
+npm version minor -m "Version %s"   # incrémente, commite et étiquette d'un coup
+git push --follow-tags
+pnpm run fichier-unique
 ```
 
-- **Fichier autonome.** `pnpm run fichier-unique` replie `dist/` en un seul `.html` (~490 ko)
-  qui s'ouvre hors ligne, sans serveur. C'est la voie qui ne fait sortir la maquette d'aucun
-  réseau interne. Le nom du fichier porte la version.
-- **Lien restreint.** Si un lien est nécessaire, héberger `dist/` derrière une
-  authentification limitée au domaine de l'établissement (Azure Static Web Apps avec Entra
-  ID, ou Cloudflare Pages avec Access). Ne jamais héberger sans contrôle d'accès.
+`npm version` refuse de s'exécuter si le dépôt est modifié : une version livrée correspond
+toujours à un commit, et l'étiquette permet d'y revenir. Le fichier produit —
+`DIMADOSE-maquette-v3.1.0.html`, environ 490 ko — s'ouvre hors ligne par double-clic, sans
+serveur et sans fichier voisin. Il s'envoie par le canal interne de l'établissement.
 
-La version affichée en pied d'écran (`vX.Y.Z · commit`) identifie le build diffusé : un
-relecteur qui signale un comportement peut dire exactement sur quoi il l'a vu.
+Choisir `patch` pour une correction, `minor` pour des changements de fond, `major` pour une
+refonte. Puis décrire la version dans `CHANGELOG.md`.
+
+### Essai en cours de travail
+
+`pnpm run fichier-unique` fonctionne aussi sur un dépôt modifié, mais nomme alors le fichier
+`…-modifie.html` et le dit : un tel fichier ne correspond à aucun commit, un retour de
+relecture ne pourrait pas être rattaché à du code. Il n'écrase jamais le fichier de la version
+du même numéro.
+
+### Si un lien est indispensable
+
+Héberger `dist/` **derrière une authentification limitée au domaine de l'établissement** :
+Azure Static Web Apps avec Entra ID si l'établissement est sous Microsoft 365, sinon
+Cloudflare Pages avec Access. Jamais d'hébergement sans contrôle d'accès, et jamais GitHub
+Pages — quel que soit le plan, le site publié est public.

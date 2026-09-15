@@ -12,6 +12,25 @@
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { execSync } from 'node:child_process'
+
+/**
+ * Le dépôt porte-t-il des modifications non commitées ?
+ *
+ * Un fichier produit depuis un dépôt modifié ne correspond à aucun commit : on
+ * ne peut pas retrouver le code qu'un relecteur a eu sous les yeux. Ce n'est pas
+ * une erreur — c'est normal pour un essai en cours de travail — mais un tel
+ * fichier ne doit pas pouvoir se faire passer pour une version livrée, ni
+ * écraser celle qui porte le même numéro.
+ */
+function depotModifie() {
+  try {
+    return execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim().length > 0
+  } catch {
+    return false // Pas de git : rien à affirmer, on ne bloque pas.
+  }
+}
 
 const DIST = 'dist'
 const actifs = readdirSync(join(DIST, 'assets'))
@@ -39,8 +58,16 @@ if (/(?:src|href)="[^"]*assets\//.test(html)) {
 }
 
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version
-const sortie = `DIMADOSE-maquette-v${version}.html`
+const modifie = depotModifie()
+const sortie = `DIMADOSE-maquette-v${version}${modifie ? '-modifie' : ''}.html`
 writeFileSync(sortie, html, 'utf8')
 
 const ko = Math.round(statSync(sortie).size / 1024)
 console.log(`${sortie} — ${ko} ko, autonome, s'ouvre hors ligne.`)
+if (modifie) {
+  console.warn(
+    `\n  Dépôt modifié : ce fichier ne correspond à aucun commit.\n`
+    + `  Bon pour un essai, pas pour une relecture — un retour ne pourrait pas être\n`
+    + `  rattaché à du code. Pour livrer une version : commitez, puis « npm version ».\n`,
+  )
+}
