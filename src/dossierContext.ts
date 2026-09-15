@@ -77,6 +77,10 @@ export interface DossierContexte {
   // ── Actions ──
   tracer: (action: ActionTracee) => void
   setSeanceCourante: (n: number) => void
+  /** Trace la validation (ou la réouverture) d'une étape du workflow. */
+  validerEtape: (etape: string, validee: boolean) => void
+  /** Trace ce qui sort de l'outil : jeu de contraintes, rapport, journal. */
+  tracerExport: (quoi: string, detail?: string) => void
   reviserQualite: (numero: number, v: VerdictQualite | undefined) => void
   reviserDeformation: (numero: number, v: VerdictDeformation | undefined) => void
   choisirModeCumul: (numero: number, m: ModeCumul) => void

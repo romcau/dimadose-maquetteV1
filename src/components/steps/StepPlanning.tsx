@@ -42,8 +42,8 @@ const initialData: UploadFile[] = [
   { id: 'CTp',     label: 'CTp',          hint: 'Scanner de planification',                status: 'missing', uploadable: true },
   { id: 'IRMp',    label: 'IRMp',         hint: 'IRM de planification — devient IRMref (S1)', status: 'missing', uploadable: true },
   { id: 'RTSSp',   label: 'RTSSp',        hint: 'Contours cibles + OARs',                  status: 'missing', uploadable: true },
-  { id: 'PP',      label: 'PP',           hint: 'Plan de traitement de référence',         status: 'missing', uploadable: true },
-  { id: 'Dose',    label: 'Dose',         hint: 'Distribution de dose de référence',       status: 'missing', uploadable: true },
+  { id: 'RTPp',    label: 'RTPp',         hint: 'Plan de traitement de référence — source des contraintes', status: 'missing', uploadable: true },
+  { id: 'RTDosep', label: 'RTDosep',      hint: 'Distribution de dose de référence — prévisionnel du cumul', status: 'missing', uploadable: true },
   { id: 'RegCTp',  label: 'Reg CTp–IRMp', hint: 'Recalage rigide — calculé par DIMADOSE',  status: 'pending', uploadable: false },
 ]
 

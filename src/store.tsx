@@ -21,8 +21,8 @@ import {
 } from './dossierContext'
 import {
   dossier,
+  libellesEtapes,
   libellesRoles,
-  referentielsDisponibles,
   type CritereComparaison,
   type Voie,
 } from './data'
@@ -36,7 +36,9 @@ import {
   labelModeCumul,
   labelQualite,
   proposerContraintes,
+  labelReferentiel,
   recommanderVoie,
+  REFERENTIEL_PAR_DEFAUT,
   type CandidateDose,
   type Decisions,
   type EntreeTrace,
@@ -96,7 +98,7 @@ export function DossierProvider({
   const [seanceCourante, setSeanceCouranteState] = useState(initial?.seanceCourante ?? seanceInitiale)
   const [decisions, setDecisions] = useState<Decisions>(initial?.decisions ?? decisionsEnregistrees)
   const [critere, setCritereState] = useState<CritereComparaison>(initial?.critere ?? 'dvh')
-  const [irmref, setIrmrefState] = useState(initial?.irmref ?? referentielsDisponibles[0].id)
+  const [irmref, setIrmrefState] = useState(initial?.irmref ?? REFERENTIEL_PAR_DEFAUT)
   const [contraintesEditees, setContraintesEditees] =
     useState<Record<number, Record<string, number>>>(initial?.contraintesEditees ?? {})
   const [trace, setTrace] = useState<EntreeTrace[]>(initial?.trace ?? [])
@@ -186,7 +188,7 @@ export function DossierProvider({
     setSeanceCouranteState(seanceInitiale)
     setDecisions(decisionsEnregistrees)
     setCritereState('dvh')
-    setIrmrefState(referentielsDisponibles[0].id)
+    setIrmrefState(REFERENTIEL_PAR_DEFAUT)
     setContraintesEditees({})
     setTrace([])
     setEnregistreLe(null)
@@ -195,13 +197,26 @@ export function DossierProvider({
   // ── Actions, chacune inscrite au journal ──
 
   const actions = useMemo(() => ({
-    setSeanceCourante: (n: number) => {
-      setSeanceCouranteState(n)
+    // Passer d'une séance à l'autre est de la navigation, pas un acte : le
+    // journal n'en garde rien. Ce qui compte est tracé par validerEtape et
+    // par la fin de séance.
+    setSeanceCourante: (n: number) => setSeanceCouranteState(n),
+
+    validerEtape: (etape: string, validee: boolean) => {
       tracer({
-        categorie: 'seance',
-        seance: n,
-        libelle: `Ouverture du workflow de la séance ${n}`,
+        categorie: 'etape',
+        seance: seanceCourante,
+        libelle: validee
+          ? `Étape « ${libellesEtapes[etape] ?? etape} » validée`
+          : `Étape « ${libellesEtapes[etape] ?? etape} » rouverte`,
+        detail: validee
+          ? 'Données et configuration de l’étape vérifiées avant de poursuivre.'
+          : undefined,
       })
+    },
+
+    tracerExport: (quoi: string, detail?: string) => {
+      tracer({ categorie: 'export', seance: seanceCourante, libelle: quoi, detail })
     },
 
     reviserQualite: (numero: number, v: VerdictQualite | undefined) => {
@@ -339,10 +354,10 @@ export function DossierProvider({
         categorie: 'referentiel',
         seance: null,
         libelle: 'Référentiel de sommation : '
-          + (referentielsDisponibles.find(r => r.id === id)?.label ?? id),
+          + labelReferentiel(id),
       })
     },
-  }), [patch, tracer, seance, recommandation])
+  }), [patch, tracer, seance, recommandation, seanceCourante])
 
   const editerContrainte = useCallback((structureId: string, valeurSaisie: number) => {
     setContraintesEditees(prev => ({
@@ -407,7 +422,7 @@ export function DossierProvider({
     valeurContrainte,
     contraintesModifiees,
     rapport,
-    irmrefLabel: referentielsDisponibles.find(r => r.id === irmref)?.label ?? irmref,
+    irmrefLabel: labelReferentiel(irmref),
     alertes,
 
     stockagePersistant: persistant,

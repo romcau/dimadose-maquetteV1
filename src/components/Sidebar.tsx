@@ -1,5 +1,6 @@
 import { type PatientRecord } from './Dashboard'
 import { useDossier } from '../store'
+import { etatsMoments, type MomentId } from '../logic'
 
 export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4'
 
@@ -9,6 +10,8 @@ interface Props {
   onChange: (p: Page) => void
   validatedSteps: Set<Page>
   onOpenDicom?: () => void
+  /** Ouvre l'un des quatre moments de l'aide à la décision. */
+  onOpenMoment?: (id: MomentId) => void
 }
 
 const workflowSteps: { id: Page; num: string; label: string; sub: string; gating?: boolean }[] = [
@@ -18,7 +21,14 @@ const workflowSteps: { id: Page; num: string; label: string; sub: string; gating
   { id: 'step-4', num: '4', label: 'Gating',            sub: 'Traitement asservi', gating: true },
 ]
 
-export default function Sidebar({ patient: p, current, onChange, validatedSteps = new Set(), onOpenDicom }: Props) {
+export default function Sidebar({
+  patient: p,
+  current,
+  onChange,
+  validatedSteps = new Set(),
+  onOpenDicom,
+  onOpenMoment,
+}: Props) {
   const currentIdx  = workflowSteps.findIndex(s => s.id === current)
   const d = useDossier()
 
@@ -30,6 +40,12 @@ export default function Sidebar({ patient: p, current, onChange, validatedSteps 
   // deux restent ainsi d'accord quand on enchaîne sur la séance suivante.
   const seance = d.seanceCourante
 
+  const moments = etatsMoments(d.seances, d.recommandation, seance, p.totalSeances)
+
+  // Le dossier patient a avancé, mais le workflow de la séance suivante n'est
+  // pas encore ouvert : les deux numéros diffèrent légitimement.
+  const seanceTerminee = p.seanceCourante > seance
+
   return (
     <aside className="w-56 bg-app-sidebar flex flex-col shrink-0 overflow-y-auto">
 
@@ -39,6 +55,15 @@ export default function Sidebar({ patient: p, current, onChange, validatedSteps 
         <div className="text-xs font-mono text-white/40 mt-0.5">{p.id}</div>
         <div className="text-xs text-white/50 mt-1">{p.protocole}</div>
         <div className="text-xs text-white/40">{p.prescription}</div>
+
+        {/* §6 : le référentiel de sommation doit être explicite dans l'en-tête du dossier */}
+        <div
+          className="mt-2 flex items-baseline gap-1.5 text-xs cursor-help"
+          title="Référentiel de toutes les sommations. Il doit rester le même sur l'ensemble du protocole ; il se change à l'étape « IRM du jour »."
+        >
+          <span className="text-white/30">IRMref</span>
+          <span className="font-mono text-clinical truncate">{d.irmrefLabel}</span>
+        </div>
 
         {/* Session progress */}
         <div className="mt-3 flex items-center gap-2">
@@ -53,6 +78,17 @@ export default function Sidebar({ patient: p, current, onChange, validatedSteps 
           <span className="text-xs font-mono text-white/50 shrink-0">
             S{seance}/{p.totalSeances}
           </span>
+        </div>
+
+        {/* La fiche patient peut être en avance sur le dossier ouvert : la séance
+            est délivrée, celle d'après n'est pas encore lancée. Le dire évite de
+            croire à une incohérence entre la liste et l'écran. */}
+        {seanceTerminee && (
+          <div className="mt-1.5 text-xs text-white/40 leading-snug">
+            Séance {seance} délivrée — séance {p.seanceCourante} à lancer
+          </div>
+        )}
+        <div className="hidden">
         </div>
 
         {alertes.map((a, i) => (
@@ -126,6 +162,47 @@ export default function Sidebar({ patient: p, current, onChange, validatedSteps 
               </button>
             )
           })}
+        </div>
+      </div>
+
+      {/* ── Les quatre moments ──
+          §3 du brief : quatre instants distincts, pas des onglets. On les situe
+          dans le temps et on dit ce qui s'y joue, pour ne pas tomber dessus par
+          hasard depuis une étape du workflow. */}
+      <div className="px-3 pb-2">
+        <div className="px-2 py-1.5 text-xs font-semibold text-white/30 uppercase tracking-wider mb-1">
+          Aide à la décision
+        </div>
+        <div className="flex flex-col gap-1">
+          {moments.map(m => (
+            <button
+              key={m.id}
+              onClick={() => onOpenMoment?.(m.id)}
+              title={`${m.quand} — ${m.etat}`}
+              className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-white/8 group"
+            >
+              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 transition-colors ${
+                m.niveau === 'warn'
+                  ? 'bg-warn text-white'
+                  : m.niveau === 'ok'
+                    ? 'bg-clinical/25 text-clinical'
+                    : 'bg-white/8 text-white/35'
+              }`}>
+                {m.tag}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-white/75 group-hover:text-white truncate">
+                  {m.label}
+                </div>
+                <div className="text-white/30 truncate" style={{ fontSize: '10px' }}>{m.quand}</div>
+                <div className={`truncate mt-0.5 ${
+                  m.niveau === 'warn' ? 'text-warn' : 'text-white/25'
+                }`} style={{ fontSize: '10px' }}>
+                  {m.etat}
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 

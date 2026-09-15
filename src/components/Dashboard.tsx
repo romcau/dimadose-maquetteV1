@@ -164,10 +164,12 @@ const statutLabels: Record<PatientRecord['statut'], string> = {
   'en-attente':   'En attente',
 }
 
-// Deux localisations traitées par la plateforme
+// Deux localisations traitées par la plateforme. Dose et fractionnement sont des
+// valeurs de départ proposées, pas une règle : l'hypofractionnement est un choix
+// clinique, les deux champs restent librement modifiables.
 const localisations = [
-  { label: 'Prostate',        dose: '36,25 Gy', seances: '5' },
-  { label: 'Col de l’utérus', dose: '45 Gy',    seances: '25' },
+  { label: 'Prostate',        doseGy: '36,25', fractions: '5'  },
+  { label: 'Col de l’utérus', doseGy: '45',    fractions: '25' },
 ]
 
 interface AddPatientForm {
@@ -175,19 +177,27 @@ interface AddPatientForm {
   prenom: string
   ddn: string
   localisation: string
-  prescriptionMode: 'dose' | 'seances'
-  dose: string
-  totalSeances: string
+  /** Dose totale prescrite, en Gy. */
+  doseGy: string
+  /** Nombre de fractions du protocole. Indépendant de la dose. */
+  nbFractions: string
   premiereSeance: string
 }
 
 const emptyForm: AddPatientForm = {
   nom: '', prenom: '', ddn: '',
   localisation: localisations[0].label,
-  prescriptionMode: 'seances',
-  dose: localisations[0].dose,
-  totalSeances: localisations[0].seances,
+  doseGy: localisations[0].doseGy,
+  nbFractions: localisations[0].fractions,
   premiereSeance: '',
+}
+
+/** Dose par fraction, seule valeur réellement déduite des deux autres. */
+function doseParFraction(doseGy: string, nbFractions: string): string | null {
+  const dose = parseFloat(doseGy.replace(',', '.'))
+  const n = parseInt(nbFractions, 10)
+  if (!isFinite(dose) || dose <= 0 || !n || n <= 0) return null
+  return (dose / n).toFixed(2).replace('.', ',')
 }
 
 interface Props {
@@ -203,7 +213,7 @@ interface Props {
   onLogout: () => void
 }
 
-type NavPage = 'dashboard' | 'guide' | 'utilisateurs'
+type NavPage = 'dashboard' | 'utilisateurs'
 
 const roleColors: Record<Role, string> = {
   physicien:    'bg-clinical-light text-clinical border border-clinical-border',
@@ -211,76 +221,6 @@ const roleColors: Record<Role, string> = {
   manipulateur: 'bg-slate-100 text-slate-600 border border-slate-200',
 }
 
-function GuidePage() {
-  const sections = [
-    {
-      tag: '1',
-      title: 'Planning initial',
-      content: "Réalisé une seule fois avant la première séance. Charger le CTp, acquérir l'IRMp sur IRM Unity, réaliser le recalage CTp/IRMp dans Monaco, contourner les cibles et OARs, planifier et exporter RTPp + RTDosep vers DIMADOSE.",
-    },
-    {
-      tag: '2',
-      title: 'IRM du jour',
-      content: "À chaque séance : acquérir l'IRMj sur IRM Unity, déclencher le recalage automatique IRMj/IRMref dans DIMADOSE (calcul Δx, Δy, Δz). Consulter la recommandation ATP/ATS via les outils DIMADOSE (bouton header). Valider l'étape avant de poursuivre.",
-    },
-    {
-      tag: '3',
-      title: 'Adaptation',
-      content: "Si ATP : décalage de table uniquement, plan de référence appliqué sans modification, la dose délivrée est ajoutée au cumul patient. Si ATS : importer RTSSj/RTPj/RTDosej depuis Monaco, appliquer les contraintes OAR recommandées par DIMADOSE, mettre à jour le cumul des doses. IRMv optionnelle.",
-    },
-    {
-      tag: 'A',
-      title: 'Outil A — Validation inter-séance',
-      content: "Accessible depuis le bouton Outils DIMADOSE à l'étape 2. Vérifie la qualité du recalage, analyse la déformation anatomique et évalue le cumul de dose depuis S1.",
-    },
-    {
-      tag: 'B',
-      title: 'Outil B — Recommandation ATP/ATS',
-      content: "Fournit une recommandation basée sur l'analyse du cumul de dose S1–S(N-1), les décalages et la déformation. Accessible depuis le bouton Outils DIMADOSE à l'étape 2.",
-    },
-    {
-      tag: 'C',
-      title: 'Outil C — Contraintes ATS',
-      content: "Tableau des contraintes OAR pour la séance N en cas d'ATS. Indique les marges de manœuvre (serrée / OK) et les ajustements recommandés pour Monaco.",
-    },
-    {
-      tag: 'D',
-      title: 'Outil D — Rapport final',
-      content: "Synthèse complète du traitement : dose cumulée par OAR, historique des décisions, conformité au planning. Export PDF disponible en fin de traitement.",
-    },
-  ]
-
-  return (
-    <div className="p-6 max-w-3xl">
-      <div className="mb-6">
-        <div className="text-2xl font-bold text-slate-800">Guide d'utilisation</div>
-        <div className="text-sm text-slate-400 mt-1">Plateforme DIMADOSE — Radiothérapie adaptative IRM-Linac</div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        {sections.map(s => (
-          <div key={s.tag} className="bg-white rounded-2xl p-5 flex gap-4">
-            <div className="w-8 h-8 rounded-xl bg-clinical text-white flex items-center justify-center text-xs font-bold shrink-0">
-              {s.tag}
-            </div>
-            <div>
-              <div className="text-sm font-bold text-slate-800 mb-1">{s.title}</div>
-              <div className="text-xs text-slate-500 leading-relaxed">{s.content}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 bg-clinical-light border border-clinical-border rounded-2xl p-5">
-        <div className="text-xs font-bold text-clinical uppercase tracking-wider mb-2">Support</div>
-        <div className="text-xs text-slate-600 leading-relaxed">
-          Pour toute question technique ou clinique, contacter l'équipe AQUILAB by Coexya.<br />
-          Outil d'aide à la décision uniquement — la dose reconstruite n'est pas la dose délivrée.
-        </div>
-      </div>
-    </div>
-  )
-}
 
 const compteVide: Compte = {
   identifiant: '',
@@ -563,16 +503,6 @@ const navItems: { id: NavPage; label: string; sub: string; icon: ReactNode }[] =
     ),
   },
   {
-    id: 'guide',
-    label: "Guide d'utilisation",
-    sub: 'Documentation',
-    icon: (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-      </svg>
-    ),
-  },
-  {
     id: 'utilisateurs',
     label: 'Gestion des utilisateurs',
     sub: 'Équipes & permissions',
@@ -609,12 +539,19 @@ export default function Dashboard({
   // faux dès qu'on allait dans le guide ou la gestion des utilisateurs.
   const pageCourante = navItems.find(i => i.id === navPage) ?? navItems[0]
 
-  const listeModifiee =
-    patients.length !== patientsDemo.length
-    || patients.some((x, i) => x.id !== patientsDemo[i]?.id)
+  // Comparer aussi le contenu : jouer des séances modifie les dossiers sans
+  // toucher à la composition de la liste, et il faut pouvoir revenir au
+  // scénario de référence dans ce cas aussi.
+  const listeModifiee = JSON.stringify(patients) !== JSON.stringify(patientsDemo)
 
+  /**
+   * Rétablir la démonstration, c'est remettre la liste *et* l'état de chaque
+   * dossier : sinon la ligne annonce une séance et le dossier en montre une
+   * autre, parce que les décisions enregistrées survivent à la liste.
+   */
   const retablirListeDemo = () => {
     effacerListePatients()
+    for (const p of [...patients, ...patientsDemo]) effacerDossierEnregistre(p.id)
     setPatients(patientsDemo)
   }
 
@@ -644,7 +581,12 @@ export default function Dashboard({
 
   const handleLocalisationChange = (val: string) => {
     const loc = localisations.find(l => l.label === val)
-    setForm(f => ({ ...f, localisation: val, dose: loc?.dose ?? '', totalSeances: loc?.seances ?? f.totalSeances }))
+    setForm(f => ({
+      ...f,
+      localisation: val,
+      doseGy: loc?.doseGy ?? f.doseGy,
+      nbFractions: loc?.fractions ?? f.nbFractions,
+    }))
   }
 
   const handleAddPatient = () => {
@@ -652,12 +594,20 @@ export default function Dashboard({
       setFormError('Nom, prénom et date de naissance sont requis.')
       return
     }
+    const dose = parseFloat(form.doseGy.replace(',', '.'))
+    const fractions = parseInt(form.nbFractions, 10)
+    if (!isFinite(dose) || dose <= 0) {
+      setFormError('La dose prescrite doit être un nombre de Gy supérieur à zéro.')
+      return
+    }
+    if (!fractions || fractions <= 0) {
+      setFormError('Le nombre de fractions doit être supérieur à zéro.')
+      return
+    }
     setFormError('')
     const nextNum = String(patients.length + 200).padStart(4, '0')
-    const seances = parseInt(form.totalSeances) || 5
-    const prescription = form.prescriptionMode === 'dose'
-      ? form.dose
-      : `${seances} séances`
+    const seances = fractions
+    const prescription = `${form.doseGy.trim()} Gy / ${fractions} fr`
     const newPatient: PatientRecord = {
       id: `P-2026-0${nextNum}`,
       nom: form.nom.trim().toUpperCase(),
@@ -805,7 +755,6 @@ export default function Dashboard({
 
         {/* ── Main content ── */}
         <div className="flex-1 overflow-y-auto">
-          {navPage === 'guide'       && <GuidePage />}
           {navPage === 'utilisateurs' && <UsersPage comptes={comptes} setComptes={setComptes} readOnly={readOnly} />}
           {navPage === 'dashboard'   && (
       <main className="p-6 flex flex-col gap-5">
@@ -1043,7 +992,7 @@ export default function Dashboard({
                 <button
                   onClick={retablirListeDemo}
                   className="text-clinical hover:underline"
-                  title="Remettre la liste de patients du scénario de démonstration"
+                  title="Remettre la liste de patients et l'état de chaque dossier du scénario de démonstration — décisions et journaux enregistrés effacés"
                 >
                   Rétablir la liste de démonstration
                 </button>
@@ -1121,48 +1070,51 @@ export default function Dashboard({
                     </div>
                   </div>
 
-                  {/* Prescription : dose OU nombre de séances */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Prescription</label>
-                    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 mb-2.5">
-                      {([
-                        { id: 'dose' as const,    label: 'Dose prescrite' },
-                        { id: 'seances' as const, label: 'Nombre de séances' },
-                      ]).map(opt => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setForm(f => ({ ...f, prescriptionMode: opt.id }))}
-                          className={`flex-1 text-xs font-semibold py-1.5 rounded-xl transition-colors ${
-                            form.prescriptionMode === opt.id ? 'bg-white text-clinical shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                  {/* Prescription : dose et fractionnement sont deux données
+                      indépendantes — l'hypofractionnement est un choix clinique,
+                      pas une conséquence de la dose. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Dose prescrite
+                      </label>
+                      <div className="relative">
+                        <input
+                          value={form.doseGy}
+                          onChange={e => setForm(f => ({ ...f, doseGy: e.target.value }))}
+                          placeholder="36,25"
+                          inputMode="decimal"
+                          className="w-full border border-slate-200 rounded-2xl pl-4 pr-10 py-2.5 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all font-mono"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">Gy</span>
+                      </div>
                     </div>
-                    {form.prescriptionMode === 'dose' ? (
-                      <input
-                        value={form.dose}
-                        onChange={e => setForm(f => ({ ...f, dose: e.target.value }))}
-                        placeholder="ex. 36,25 Gy"
-                        className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all font-mono"
-                      />
-                    ) : (
-                      <input
-                        type="number"
-                        min="1"
-                        max="35"
-                        value={form.totalSeances}
-                        onChange={e => setForm(f => ({ ...f, totalSeances: e.target.value }))}
-                        placeholder="ex. 5"
-                        className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all font-mono"
-                      />
-                    )}
-                    <div className="text-xs text-slate-400 mt-1.5">
-                      Renseignez la dose prescrite <em>ou</em> le nombre de séances — l'autre paramètre en découle.
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Nombre de fractions
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="1"
+                          max="40"
+                          value={form.nbFractions}
+                          onChange={e => setForm(f => ({ ...f, nbFractions: e.target.value }))}
+                          placeholder="5"
+                          className="w-full border border-slate-200 rounded-2xl pl-4 pr-10 py-2.5 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all font-mono"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">fr</span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Seule valeur réellement déduite des deux saisies */}
+                  <div className="-mt-1 text-xs text-slate-400">
+                    {doseParFraction(form.doseGy, form.nbFractions)
+                      ? <>Soit <strong className="text-slate-600 font-mono">{doseParFraction(form.doseGy, form.nbFractions)} Gy</strong> par fraction. Les deux champs se saisissent indépendamment.</>
+                      : <>Renseignez la dose totale et le nombre de fractions.</>}
+                  </div>
+
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Première séance</label>

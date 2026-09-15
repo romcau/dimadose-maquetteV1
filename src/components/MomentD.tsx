@@ -4,15 +4,17 @@ import {
   exporterTrace,
   fmtSigne,
   formatDateCourte,
-  formatHorodatage,
+  grouperTraceParSeance,
   labelCategorieTrace,
   labelDeformation,
   labelQualite,
+  labelRangTrace,
   labelStatutFinal,
-  niveauCategorieTrace,
   niveauDeformation,
   niveauQualite,
+  rangCategorieTrace,
   type Niveau,
+  type RangTrace,
 } from '../logic'
 import { useDossier } from '../store'
 import {
@@ -24,6 +26,14 @@ import {
   StatusBadge,
   TrajectoireCumul,
 } from './shared'
+
+/** Heure seule : la date est portée par l'en-tête de groupe. */
+const formatHeure = (iso: string): string => {
+  const d = new Date(iso)
+  return isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
 
 const fondEvenement: Record<Niveau, string> = {
   ok: 'bg-ok-bg border-ok-border',
@@ -37,12 +47,19 @@ export default function MomentD() {
   const r = d.rapport
   const [structureTracee, setStructureTracee] = useState('rectum-d05')
   const [journalExporte, setJournalExporte] = useState(false)
+  const [filtre, setFiltre] = useState<'tout' | RangTrace>('tout')
+
+  const traceFiltree = filtre === 'tout'
+    ? d.trace
+    : d.trace.filter(e => rangCategorieTrace[e.categorie] === filtre)
+  const groupes = grouperTraceParSeance(traceFiltree)
+  const ecarts = d.trace.filter(e => e.ecart).length
 
   const exporterJournal = () => {
     const texte = exporterTrace(d.trace, [
       `DIMADOSE — journal de traçabilité · ${dossier.nom} ${dossier.prenom} · ${dossier.id}`,
       `${r.seancesRealisees.length} séance(s) réalisée(s) sur ${dossier.nbSeances}`,
-      'Horodatage	Séance	Nature	Action	Détail	Auteur	Écart',
+      'Horodatage	Séance	Rang	Nature	Acte	Détail	Auteur	Écart',
     ])
     const url = URL.createObjectURL(new Blob([texte], { type: 'text/plain;charset=utf-8' }))
     const a = document.createElement('a')
@@ -52,6 +69,14 @@ export default function MomentD() {
     URL.revokeObjectURL(url)
     setJournalExporte(true)
     setTimeout(() => setJournalExporte(false), 2000)
+  }
+
+  const exporterRapport = () => {
+    d.tracerExport(
+      'Rapport de traitement exporté en PDF',
+      `${r.seancesRealisees.length} séance(s) réalisée(s) · confiance du cumul ${r.recap.confiance}`,
+    )
+    window.print()
   }
 
   const cumulFinal = d.cumulJusqua(dossier.nbSeances)
@@ -75,7 +100,7 @@ export default function MomentD() {
           </p>
         </div>
         <button
-          onClick={() => window.print()}
+          onClick={exporterRapport}
           className="shrink-0 text-sm px-4 py-2 rounded-sm border font-medium bg-slate-800 text-white border-slate-800 hover:bg-slate-900 transition-colors"
         >
           Exporter en PDF
@@ -339,87 +364,136 @@ export default function MomentD() {
 
       {/* ── Journal de traçabilité ── */}
       <Card className="p-5">
-        <div className="flex items-baseline justify-between mb-3">
-          <SectionTitle>Journal de traçabilité — {d.trace.length} action(s)</SectionTitle>
-          <div className="flex items-center gap-3">
-            {d.trace.some(e => e.ecart) && (
-              <span className="text-xs text-warn-text">
-                {d.trace.filter(e => e.ecart).length} écart(s) à une proposition de l'outil
-              </span>
-            )}
-            <button
-              onClick={exporterJournal}
-              disabled={d.trace.length === 0}
-              className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
-                journalExporte
-                  ? 'bg-ok-bg text-ok-text border-ok-border'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed'
-              }`}
-            >
-              {journalExporte ? '✓ Exporté' : 'Exporter le journal (.txt)'}
-            </button>
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <SectionTitle>Journal de traçabilité</SectionTitle>
+            <div className="flex items-center gap-3 text-xs text-slate-500 -mt-1">
+              <span>{d.trace.length} acte(s) enregistré(s)</span>
+              {ecarts > 0 && (
+                <span className="text-warn-text bg-warn-bg border border-warn-border rounded-sm px-2 py-0.5">
+                  {ecarts} écart(s) à une proposition de l'outil
+                </span>
+              )}
+            </div>
           </div>
+          <button
+            onClick={exporterJournal}
+            disabled={d.trace.length === 0}
+            className={`shrink-0 text-xs px-3 py-1.5 rounded-sm border transition-colors ${
+              journalExporte
+                ? 'bg-ok-bg text-ok-text border-ok-border'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed'
+            }`}
+          >
+            {journalExporte ? '✓ Exporté' : 'Exporter le journal (.txt)'}
+          </button>
         </div>
 
-        {d.trace.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Aucune action enregistrée depuis l'ouverture du dossier. Les décisions déjà prises aux
-            séances S1 à S3 font partie de l'historique du dossier, pas de ce journal.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  {['Horodatage', 'Séance', 'Nature', 'Action', 'Auteur'].map(h => (
-                    <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {d.trace.map(e => (
-                  <tr key={e.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-                    <td className="px-3 py-2.5 text-xs font-mono text-slate-500 whitespace-nowrap">
-                      {formatHorodatage(e.horodatage)}
-                    </td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-slate-600">
-                      {e.seance === null ? '—' : `S${e.seance}`}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <StatusBadge level={niveauCategorieTrace[e.categorie]}>
-                        {labelCategorieTrace[e.categorie]}
-                      </StatusBadge>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-slate-700">
-                      <div className="flex items-center gap-2">
-                        {e.libelle}
-                        {e.ecart && (
-                          <span className="text-warn-text bg-warn-bg border border-warn-border rounded-sm px-1.5" style={{ fontSize: '10px' }}>
-                            écart à la proposition
-                          </span>
-                        )}
-                      </div>
-                      {e.detail && <div className="text-slate-400 mt-0.5">{e.detail}</div>}
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                      {e.auteur}
-                      <div className="text-slate-400">{e.role}</div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Filtre par nature d'acte : les décisions se lisent avant les réglages */}
+        {d.trace.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {(['tout', 'decision', 'verification', 'parametre'] as const).map(f => {
+              const compte = f === 'tout'
+                ? d.trace.length
+                : d.trace.filter(e => rangCategorieTrace[e.categorie] === f).length
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFiltre(f)}
+                  disabled={compte === 0}
+                  className={`text-xs px-3 py-1.5 rounded-sm border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    filtre === f
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {f === 'tout' ? 'Tous les actes' : labelRangTrace[f]}
+                  <span className="ml-1.5 opacity-60">{compte}</span>
+                </button>
+              )
+            })}
           </div>
         )}
 
-        <p className="mt-3 text-xs text-slate-400">
+        {traceFiltree.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            {d.trace.length === 0
+              ? "Aucun acte enregistré depuis l'ouverture du dossier. Les décisions des séances S1 "
+                + "à S3 font partie de l'historique du patient, pas de ce journal."
+              : 'Aucun acte de cette nature.'}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-5">
+            {groupes.map(groupe => (
+              <div key={groupe.seance ?? 'dossier'}>
+                {/* En-tête de groupe : le journal se lit séance par séance */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold text-slate-700 font-mono">
+                    {groupe.seance === null ? 'Dossier' : `Séance ${groupe.seance}`}
+                  </span>
+                  {groupe.seance !== null && (
+                    <span className="text-xs text-slate-400">
+                      {formatDateCourte(d.seance(groupe.seance).mesures.date)}
+                    </span>
+                  )}
+                  <span className="h-px flex-1 bg-slate-100" />
+                  <span className="text-xs text-slate-400">{groupe.entrees.length} acte(s)</span>
+                </div>
+
+                <ol className="border-l border-slate-200 ml-1.5 pl-4 flex flex-col gap-3">
+                  {groupe.entrees.map(e => {
+                    const critique = e.categorie === 'reacquisition'
+                    return (
+                      <li key={e.id} className="relative flex gap-3">
+                        {/* Pastille sur la frise — la couleur ne marque que l'exception */}
+                        <span
+                          className={`absolute -left-[22px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                            critique ? 'bg-danger' : e.ecart ? 'bg-warn' : 'bg-slate-300'
+                          }`}
+                        />
+                        <span className="text-xs font-mono text-slate-400 w-10 shrink-0 tabular-nums pt-0.5">
+                          {formatHeure(e.horodatage)}
+                        </span>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-sm text-slate-800 font-medium">{e.libelle}</span>
+                            <span className="text-xs text-slate-400 border border-slate-200 rounded-sm px-1.5">
+                              {labelCategorieTrace[e.categorie]}
+                            </span>
+                            {e.ecart && (
+                              <span className="text-xs text-warn-text bg-warn-bg border border-warn-border rounded-sm px-1.5">
+                                écart à la proposition
+                              </span>
+                            )}
+                          </div>
+                          {e.detail && (
+                            <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                              {e.detail}
+                            </div>
+                          )}
+                        </div>
+
+                        <span className="text-xs text-slate-400 shrink-0 text-right leading-tight pt-0.5">
+                          {e.auteur}
+                          <span className="block text-slate-300">{e.role}</span>
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400 leading-relaxed">
           Journal en ajout seul, enregistré {d.stockagePersistant ? 'dans ce navigateur' : 'en mémoire uniquement'}.
-          Il conserve ce qui a été proposé, ce qui a été retenu, et par qui.
+          Il conserve les actes de l'équipe — étapes validées, voie retenue, verdicts révisés, cumul
+          enregistré, contraintes ajustées et exports — avec ce que l'outil proposait, ce qui a été
+          retenu, par qui et quand. La navigation entre écrans n'y figure pas.
         </p>
       </Card>
-
       <div className="text-xs text-slate-400 text-center py-4 border-t border-slate-200">
         DIMADOSE WP5 · AQUILAB by Coexya · Dose reconstruite — non délivrée ·
         Outil d'aide à la décision uniquement, ne remplace pas le jugement clinique

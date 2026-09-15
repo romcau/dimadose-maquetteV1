@@ -202,8 +202,18 @@ function PatientView({
     })
   }
 
-  const validate   = (step: Page) => setValidatedSteps(prev => new Set([...prev, step]))
-  const unvalidate = (step: Page) => setValidatedSteps(prev => { const s = new Set(prev); s.delete(step); return s })
+  // Valider une étape est un acte : il part au journal, une seule fois.
+  const validate = (step: Page) => {
+    if (validatedSteps.has(step)) return
+    d.validerEtape(step, true)
+    setValidatedSteps(prev => new Set([...prev, step]))
+  }
+
+  const unvalidate = (step: Page) => {
+    if (!validatedSteps.has(step)) return
+    d.validerEtape(step, false)
+    setValidatedSteps(prev => { const s = new Set(prev); s.delete(step); return s })
+  }
 
   // La décision clinique est requise avant de passer à l'adaptation.
   const goToAdaptation = () => {
@@ -341,6 +351,7 @@ function PatientView({
           onChange={setPage}
           validatedSteps={validatedSteps}
           onOpenDicom={() => setDicomOpen(true)}
+          onOpenMoment={setActiveModal}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">

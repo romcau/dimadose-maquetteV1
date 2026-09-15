@@ -1,6 +1,12 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
-import { dossier, referentielsDisponibles } from '../../data'
-import { fmt, fmtSigne, type Voie } from '../../logic'
+import { dossier } from '../../data'
+import {
+  fmt,
+  fmtSigne,
+  labelReferentiel,
+  referentielsPossibles,
+  type Voie,
+} from '../../logic'
 import { useDossier } from '../../store'
 
 interface Props {
@@ -25,12 +31,16 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
 
   const [irmjStatus, setIrmjStatus] = useState<FileStatus>('missing')
   const [regStatus, setRegStatus] = useState<FileStatus>('missing')
+  // Identifiant du référentiel visé, tant que le changement n'est pas confirmé.
+  const [changementRef, setChangementRef] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const regInputRef = useRef<HTMLInputElement>(null)
 
   const premiereSeance = n <= 1
   const historique = d.seances.filter(s => s.numero < n && s.realisee)
   const regDone = regStatus === 'done'
+  const referentiels = referentielsPossibles(d.seances, n)
+  const seancesSommees = d.cumul.seancesIncluses
   const decision = seance.voie
 
   const upload = (setter: (s: FileStatus) => void) => (e: ChangeEvent<HTMLInputElement>) => {
@@ -57,8 +67,10 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
         <div className="px-5 py-4 border-b border-slate-100">
           <div className="text-sm font-bold text-slate-800">IRM de référence (IRMref)</div>
           <div className="text-xs text-slate-400 mt-0.5">
-            Référentiel unique de toutes les sommations. Il n'est jamais modifié en cours de
-            traitement : les sommations ne chaînent donc pas les erreurs de recalage.
+            Référentiel unique de toutes les sommations. Il doit rester le même d'une séance à
+            l'autre sur l'ensemble du protocole : c'est ce qui évite que les sommations chaînent
+            les erreurs de recalage. En changer reste possible, mais impose de recalculer les
+            sommations déjà faites.
           </div>
         </div>
         <div className="p-4">
@@ -71,16 +83,17 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
-                {referentielsDisponibles.map(opt => (
+                {referentiels.map(opt => (
                   <button
                     key={opt.id}
-                    disabled={!canUpload || d.cumul.seancesIncluses.length > 0}
-                    title={
-                      d.cumul.seancesIncluses.length > 0
-                        ? 'Verrouillé : des séances ont déjà été sommées sur ce référentiel'
-                        : opt.sub
-                    }
-                    onClick={() => d.setIrmref(opt.id)}
+                    disabled={!canUpload}
+                    title={opt.sub}
+                    onClick={() => {
+                      if (opt.id === d.irmref) return
+                      // Sans sommation faite, le changement est sans conséquence.
+                      if (seancesSommees.length === 0) d.setIrmref(opt.id)
+                      else setChangementRef(opt.id)
+                    }}
                     className={`text-xs px-3 py-1.5 rounded-xl font-medium border transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                       d.irmref === opt.id
                         ? 'bg-clinical text-white border-clinical'
@@ -91,6 +104,36 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
                   </button>
                 ))}
               </div>
+
+              {/* Conséquence annoncée avant d'agir — l'outil propose, il n'impose pas */}
+              {changementRef && (
+                <div className="mt-3 bg-warn-bg border border-warn-border rounded-2xl px-4 py-3">
+                  <div className="text-xs font-semibold text-warn-text">
+                    Changer le référentiel de {d.irmrefLabel} vers {labelReferentiel(changementRef)} ?
+                  </div>
+                  <p className="text-xs text-warn-text/80 mt-1.5 leading-relaxed">
+                    {seancesSommees.length} séance(s) ont déjà été sommées sur le référentiel actuel
+                    (S{seancesSommees.join(', S')}). Leurs sommations devront être recalculées sur la
+                    nouvelle image avant que le cumul affiché redevienne valide. Le changement est
+                    inscrit au journal de traçabilité.
+                  </p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      onClick={() => { d.setIrmref(changementRef); setChangementRef(null) }}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-warn text-white hover:bg-amber-700 transition-colors"
+                    >
+                      Changer le référentiel
+                    </button>
+                    <button
+                      onClick={() => setChangementRef(null)}
+                      className="text-xs text-slate-500 hover:text-slate-700 px-2"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-slate-400 mt-2">
                 Le référentiel est un paramètre affiché, pas une constante : si l'étape de
                 planification préalable disparaît, la première séance devient la référence.

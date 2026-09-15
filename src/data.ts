@@ -23,6 +23,14 @@ export const dossier = {
   physicien: 'Mme Korhonen',
 }
 
+/** Étapes du workflow clinique, pour les journaliser par leur nom. */
+export const libellesEtapes: Record<string, string> = {
+  'step-1': 'Planning initial',
+  'step-2': 'IRM du jour',
+  'step-3': 'Adaptation',
+  'step-4': 'Gating',
+}
+
 // ─── Profils utilisateurs ────────────────────────────────────────────────────
 
 export type Role = 'physicien' | 'medecin' | 'manipulateur'
@@ -74,13 +82,6 @@ export const nomAffiche = (c: Compte): string =>
 
 export const compteParIdentifiant = (comptes: Compte[], identifiant: string): Compte | undefined =>
   comptes.find(c => c.identifiant.trim().toLowerCase() === identifiant.trim().toLowerCase())
-
-/** Images candidates comme référentiel de sommation (IRMref). */
-export const referentielsDisponibles = [
-  { id: 'irmp', label: 'IRMp — IRM de planification', sub: 'Référentiel standard' },
-  { id: 'irmj1', label: 'IRMj — Séance 1', sub: 'Si la planification préalable est supprimée' },
-  { id: 'irmj2', label: 'IRMj — Séance 2', sub: 'Désignation manuelle' },
-]
 
 // ─── Catalogue des structures et contraintes de référence (RTPp) ─────────────
 
