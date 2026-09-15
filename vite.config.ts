@@ -4,14 +4,53 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
+import packageJson from './package.json'
+import { execSync } from 'node:child_process'
+
+/**
+ * Identité du build, injectée dans l'application.
+ *
+ * Un relecteur qui signale quelque chose doit pouvoir dire sur quelle version il
+ * l'a vu. On prend le commit fourni par l'intégration continue quand elle
+ * existe, sinon celui du dépôt local, sinon rien — jamais d'échec de build.
+ */
+function identiteBuild() {
+  const court = (v: string) => v.trim().slice(0, 7)
+  let commit = process.env.GITHUB_SHA ? court(process.env.GITHUB_SHA) : ''
+  let propre = true
+  if (!commit) {
+    try {
+      commit = court(execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString())
+      propre = execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString().trim().length === 0
+    } catch {
+      commit = 'inconnu'
+    }
+  }
+  return {
+    version: packageJson.version,
+    commit,
+    // Un build issu d'un dépôt modifié n'est pas celui du commit affiché.
+    modifie: !propre,
+    date: new Date().toISOString(),
+  }
+}
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
 
+  const build = identiteBuild()
+
   return {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    define: {
+      __VERSION__: JSON.stringify(build.version),
+      __COMMIT__: JSON.stringify(build.commit),
+      __BUILD_MODIFIE__: JSON.stringify(build.modifie),
+      __BUILD_DATE__: JSON.stringify(build.date),
+    },
     build: {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
