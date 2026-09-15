@@ -70,3 +70,47 @@ l'image de référence.
 - L'étape **Gating** est un emplacement réservé, son contenu reste à définir.
 - L'état est enregistré dans le navigateur, pas sur un serveur : il est propre au poste.
   Le menu utilisateur permet de revenir au scénario de démonstration.
+
+## Diffusion
+
+Le dépôt est privé et doit le rester. Il n'y a **pas de publication automatique** : le
+workflow GitHub Pages a été retiré, parce qu'un site Pages reste public même lorsqu'il est
+construit depuis un dépôt privé — seul GitHub Enterprise Cloud sait en restreindre l'accès.
+Tant qu'un tel workflow existe, rendre le dépôt public une seule fois suffit à publier la
+maquette au push suivant.
+
+Le code vit donc sur GitHub, et la relecture passe par un fichier autonome produit à chaque
+version. Les deux se rejoignent par le numéro de version affiché en pied d'écran.
+
+### Livrer une version à relire
+
+Une fois le travail fusionné sur `main` :
+
+```bash
+git checkout main && git pull
+npm version minor -m "Version %s"   # incrémente, commite et étiquette d'un coup
+git push --follow-tags
+pnpm run fichier-unique
+```
+
+`npm version` refuse de s'exécuter si le dépôt est modifié : une version livrée correspond
+toujours à un commit, et l'étiquette permet d'y revenir. Le fichier produit —
+`DIMADOSE-maquette-v3.1.0.html`, environ 490 ko — s'ouvre hors ligne par double-clic, sans
+serveur et sans fichier voisin. Il s'envoie par le canal interne de l'établissement.
+
+Choisir `patch` pour une correction, `minor` pour des changements de fond, `major` pour une
+refonte. Puis décrire la version dans `CHANGELOG.md`.
+
+### Essai en cours de travail
+
+`pnpm run fichier-unique` fonctionne aussi sur un dépôt modifié, mais nomme alors le fichier
+`…-modifie.html` et le dit : un tel fichier ne correspond à aucun commit, un retour de
+relecture ne pourrait pas être rattaché à du code. Il n'écrase jamais le fichier de la version
+du même numéro.
+
+### Si un lien est indispensable
+
+Héberger `dist/` **derrière une authentification limitée au domaine de l'établissement** :
+Azure Static Web Apps avec Entra ID si l'établissement est sous Microsoft 365, sinon
+Cloudflare Pages avec Access. Jamais d'hébergement sans contrôle d'accès, et jamais GitHub
+Pages — quel que soit le plan, le site publié est public.

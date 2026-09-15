@@ -18,3 +18,6 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Fichier de relecture produit par `pnpm run fichier-unique` : il se régénère.
+DIMADOSE-maquette-v*.html
