@@ -70,3 +70,27 @@ l'image de référence.
 - L'étape **Gating** est un emplacement réservé, son contenu reste à définir.
 - L'état est enregistré dans le navigateur, pas sur un serveur : il est propre au poste.
   Le menu utilisateur permet de revenir au scénario de démonstration.
+
+## Diffusion
+
+Le dépôt est privé et doit le rester. Il n'y a **pas de publication automatique** : le
+workflow GitHub Pages a été retiré, parce qu'un site Pages reste public même lorsqu'il est
+construit depuis un dépôt privé — seul GitHub Enterprise Cloud sait en restreindre l'accès.
+Tant qu'un tel workflow existe, rendre le dépôt public une seule fois suffit à publier la
+maquette au push suivant.
+
+Pour faire relire la maquette, construire et diffuser le résultat :
+
+```bash
+pnpm run build   # produit dist/ : un index.html, un .css, un .js, rien d'autre
+```
+
+- **Fichier autonome.** `dist/` peut être replié en un seul `.html` (~500 ko) qui s'ouvre
+  hors ligne, sans serveur. C'est la voie qui ne fait sortir la maquette d'aucun réseau
+  interne.
+- **Lien restreint.** Si un lien est nécessaire, héberger `dist/` derrière une
+  authentification limitée au domaine de l'établissement (Azure Static Web Apps avec Entra
+  ID, ou Cloudflare Pages avec Access). Ne jamais héberger sans contrôle d'accès.
+
+La version affichée en pied d'écran (`vX.Y.Z · commit`) identifie le build diffusé : un
+relecteur qui signale un comportement peut dire exactement sur quoi il l'a vu.
