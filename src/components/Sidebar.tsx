@@ -1,6 +1,7 @@
 import { type PatientRecord } from './Dashboard'
 import { useDossier } from '../store'
 import { etatsMoments, type MomentId } from '../logic'
+import { versionCourte, versionDetaillee } from '../version'
 
 export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4'
 
@@ -225,9 +226,12 @@ export default function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-white/8">
+      <div className="p-4 border-t border-white/8 flex flex-col gap-1">
         <div className="text-xs text-white/20 italic leading-snug">
           Dose reconstruite — non délivrée
+        </div>
+        <div className="text-xs text-white/20 font-mono cursor-help" title={versionDetaillee()}>
+          {versionCourte()}
         </div>
       </div>
     </aside>

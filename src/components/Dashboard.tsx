@@ -2,6 +2,7 @@ import { useState, type Dispatch, type ReactNode, type SetStateAction } from 're
 import DicomRecap from './DicomRecap'
 import SessionRecap from './SessionRecap'
 import { DossierProvider, alertesPourDossier } from '../store'
+import { versionCourte, versionDetaillee } from '../version'
 import { libellesRoles, nomAffiche, type Compte, type Role } from '../data'
 import { effacer as effacerDossierEnregistre, effacerListePatients } from '../persistence'
 
@@ -102,7 +103,7 @@ export const patientsDemo: PatientRecord[] = [
     protocole: 'Col de l’utérus',
     prescription: '45 Gy / 25 fr',
     seanceCourante: 1,
-    totalSeances: 5,
+    totalSeances: 25,
     dernierSeanceDate: '01 sept. 2026',
     prochaineSeanceDate: '05 sept. 2026',
     statut: 'en-cours',
@@ -751,6 +752,12 @@ export default function Dashboard({
               )
             })}
           </div>
+
+          <div className="px-5 py-4 border-t border-white/8">
+            <div className="text-xs text-white/20 font-mono cursor-help" title={versionDetaillee()}>
+              {versionCourte()}
+            </div>
+          </div>
         </nav>
 
         {/* ── Main content ── */}
@@ -878,9 +885,12 @@ export default function Dashboard({
                       </span>
                       <span className="font-mono text-xs text-slate-400">/ {p.totalSeances}</span>
                     </div>
-                    <div className="flex gap-0.5 mt-1.5">
+                    {/* Largeur totale fixe, segments proportionnels : un protocole
+                        hypofractionné (5 fr) et un protocole normofractionné (25 fr)
+                        occupent la même place dans la colonne. */}
+                    <div className={`flex mt-1.5 w-20 ${p.totalSeances > 10 ? 'gap-px' : 'gap-0.5'}`}>
                       {Array.from({ length: p.totalSeances }).map((_, i) => (
-                        <div key={i} className={`w-3 h-1.5 rounded-full ${
+                        <div key={i} className={`flex-1 h-1.5 rounded-full ${
                           i < p.seanceCourante - 1 ? 'bg-ok' :
                           i === p.seanceCourante - 1 && p.statut !== 'planification' ? 'bg-clinical' :
                           'bg-slate-200'
