@@ -44,6 +44,7 @@ const fondEvenement: Record<Niveau, string> = {
 
 export default function MomentD() {
   const d = useDossier()
+  const identite = d.identite(dossier)
   const r = d.rapport
   const [structureTracee, setStructureTracee] = useState('rectum-d05')
   const [journalExporte, setJournalExporte] = useState(false)
@@ -57,14 +58,14 @@ export default function MomentD() {
 
   const exporterJournal = () => {
     const texte = exporterTrace(d.trace, [
-      `DIMADOSE — journal de traçabilité · ${dossier.nom} ${dossier.prenom} · ${dossier.id}`,
+      `DIMADOSE — journal de traçabilité · ${identite.libelle} · ${identite.identifiant}`,
       `${r.seancesRealisees.length} séance(s) réalisée(s) sur ${dossier.nbSeances}`,
       'Horodatage	Séance	Rang	Nature	Acte	Détail	Auteur	Écart',
     ])
     const url = URL.createObjectURL(new Blob([texte], { type: 'text/plain;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `dimadose-journal-${dossier.id}.txt`
+    a.download = `dimadose-journal-${identite.identifiant}.txt`
     a.click()
     URL.revokeObjectURL(url)
     setJournalExporte(true)
@@ -92,7 +93,7 @@ export default function MomentD() {
             Rapport {r.complet ? 'de fin de traitement' : 'provisoire'}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {dossier.nom} {dossier.prenom} · {dossier.id} · {dossier.protocole}{' '}
+            {identite.libelle} · {identite.identifiant} · {dossier.protocole}{' '}
             {formatNombre(dossier.prescriptionTotale)} Gy / {dossier.nbSeances} fr ·{' '}
             {r.complet
               ? 'traitement clôturé'

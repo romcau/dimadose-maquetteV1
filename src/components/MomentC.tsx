@@ -23,6 +23,7 @@ import {
 
 export default function MomentC() {
   const d = useDossier()
+  const identite = d.identite(dossier)
   const n = d.seanceCourante
   const [enEdition, setEnEdition] = useState<string | null>(null)
   const [saisie, setSaisie] = useState('')
@@ -50,7 +51,7 @@ export default function MomentC() {
       Object.fromEntries(d.propositions.map(p => [p.id, d.valeurContrainte(p.id)])),
       [
         `DIMADOSE — jeu de contraintes proposé pour la séance ${n} / ${dossier.nbSeances}`,
-        `${dossier.nom} ${dossier.prenom} · ${dossier.id} · ${dossier.protocole}`,
+        `${identite.libelle} · ${identite.identifiant} · ${dossier.protocole}`,
         `Basé sur le cumul reconstruit S1–S${d.cumul.jusqua} (${d.cumul.seancesIncluses.length} séance(s) incluse(s))`,
         `Confiance du cumul : ${d.cumul.confiance}`,
         'À ressaisir manuellement dans le TPS Monaco — aucun échange automatique.',

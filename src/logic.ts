@@ -58,9 +58,61 @@ export interface DecisionsSeance {
   texteDeviation?: string
   /** Nouvelle acquisition demandée (IRM inexploitable). */
   reacquisition?: boolean
+  /** Qualification de la séance en fin de workflow — voir `VerdictSeance`. */
+  verdict?: VerdictSeance
 }
 
 export type Decisions = Record<number, DecisionsSeance>
+
+// ─── Qualification d'une séance ──────────────────────────────────────────────
+
+/**
+ * Le code posé par l'équipe à la fin d'une séance. Il résume, d'un coup d'œil
+ * sur le tableau de bord, ce que les écrans détaillent — et il est *dit* par
+ * quelqu'un : ce n'est pas une valeur calculée, c'est un jugement humain, au
+ * même titre que la décision ATP/ATS.
+ */
+export type CodeSeance = 'vert' | 'orange' | 'rouge'
+
+export interface VerdictSeance {
+  code: CodeSeance
+  /** Ce qui s'est passé. Obligatoire dès que le code n'est pas vert. */
+  commentaire: string
+  par: string
+  horodatage: string
+}
+
+export const libellesCodeSeance: Record<CodeSeance, string> = {
+  vert: 'Conforme',
+  orange: 'Point particulier',
+  rouge: 'Non conforme',
+}
+
+export const explicationsCodeSeance: Record<CodeSeance, string> = {
+  vert: "La séance s'est déroulée comme attendu",
+  orange: 'Quelque chose mérite d’être signalé, sans remettre la séance en cause',
+  rouge: "La séance ne correspond pas à ce qui était attendu",
+}
+
+/** Jetons de couleur, pour que le tableau de bord et le workflow s'accordent. */
+export const couleursCodeSeance: Record<CodeSeance, { pastille: string; texte: string; fond: string; bord: string }> = {
+  vert:   { pastille: 'bg-ok',     texte: 'text-ok-text',     fond: 'bg-ok-bg',     bord: 'border-ok-border' },
+  orange: { pastille: 'bg-warn',   texte: 'text-warn-text',   fond: 'bg-warn-bg',   bord: 'border-warn-border' },
+  rouge:  { pastille: 'bg-danger', texte: 'text-danger-text', fond: 'bg-danger-bg', bord: 'border-danger-border' },
+}
+
+/**
+ * Un code orange ou rouge sans explication ne transmet rien : la personne qui
+ * lira le tableau de bord dans trois semaines saura qu'il s'est passé quelque
+ * chose, sans savoir quoi. Le commentaire est donc exigé dès qu'on s'écarte du
+ * vert.
+ */
+export function verdictIncomplet(code: CodeSeance, commentaire: string): string | null {
+  if (code === 'vert') return null
+  return commentaire.trim().length === 0
+    ? `Un code ${libellesCodeSeance[code].toLowerCase()} demande une explication : dites ce qui s'est passé.`
+    : null
+}
 
 // ─── Droits par profil ───────────────────────────────────────────────────────
 
@@ -74,16 +126,93 @@ export interface Droits {
   /** Charger des données dans le dossier. */
   peutCharger: boolean
   lectureSeule: boolean
+  /**
+   * Voir qui est le patient — nom, prénom, date de naissance, identifiant.
+   *
+   * Faux pour un partenaire extérieur à l'établissement : il regarde comment
+   * l'outil raisonne, ce qui ne demande pas de savoir qui est traité.
+   */
+  voitIdentitePatient: boolean
+  /** Créer ou supprimer un dossier patient. */
+  peutGererPatients: boolean
 }
 
 export function droits(role: Role): Droits {
-  const lectureSeule = role === 'manipulateur'
+  const interne = role !== 'partenaire'
+  const lectureSeule = role === 'manipulateur' || role === 'partenaire'
   return {
     peutValiderEtape: role === 'physicien' || role === 'medecin',
     peutDeciderVoie: role === 'medecin',
     peutEvaluerSeance: role === 'physicien',
     peutCharger: !lectureSeule,
     lectureSeule,
+    voitIdentitePatient: interne,
+    peutGererPatients: interne && !lectureSeule,
+  }
+}
+
+// ─── Pseudonymisation des dossiers ───────────────────────────────────────────
+
+/**
+ * Code stable d'un dossier, dérivé de son identifiant.
+ *
+ * Stable : le même dossier porte toujours le même code, d'une session et d'un
+ * poste à l'autre. Un partenaire peut donc dire « le dossier 7C31 » et être
+ * compris, sans que personne ait nommé le patient.
+ *
+ * Le terme juste est **pseudonymisation**, pas anonymisation : qui détient la
+ * liste des dossiers peut refaire le lien. Cela protège d'un regard de passage
+ * — une démonstration, une capture d'écran, un partenaire en consultation —
+ * pas d'un recoupement délibéré.
+ */
+export function codeDossier(id: string): string {
+  // FNV-1a 32 bits : court, déterministe, sans dépendance.
+  let h = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(36).toUpperCase().slice(-4).padStart(4, '0')
+}
+
+export interface IdentiteDossier {
+  nom: string
+  prenom: string
+  id: string
+  ddn?: string
+}
+
+export interface IdentiteAffichee {
+  /** Ce qui remplace « DUPONT Michel ». */
+  libelle: string
+  /** Ce qui remplace « P-2024-0148 ». */
+  identifiant: string
+  /** Date de naissance, ou un tiret si elle est masquée. */
+  ddn: string
+  /** Vrai si l'identité est masquée — pour l'annoncer à l'écran. */
+  masquee: boolean
+}
+
+/**
+ * Comment nommer un dossier à l'écran. Point de passage unique : c'est ce qui
+ * garantit qu'aucun écran n'oublie de masquer, et qu'on n'a pas à se fier à la
+ * vigilance de chaque composant.
+ */
+export function identiteAffichee(p: IdentiteDossier, voitIdentite: boolean): IdentiteAffichee {
+  if (voitIdentite) {
+    return {
+      libelle: `${p.nom} ${p.prenom}`,
+      identifiant: p.id,
+      ddn: p.ddn ?? '—',
+      masquee: false,
+    }
+  }
+  const code = codeDossier(p.id)
+  return {
+    libelle: `Dossier ${code}`,
+    identifiant: code,
+    ddn: '—',
+    masquee: true,
   }
 }
 

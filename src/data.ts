@@ -33,18 +33,20 @@ export const libellesEtapes: Record<string, string> = {
 
 // ─── Profils utilisateurs ────────────────────────────────────────────────────
 
-export type Role = 'physicien' | 'medecin' | 'manipulateur'
+export type Role = 'physicien' | 'medecin' | 'manipulateur' | 'partenaire'
 
 export const libellesRoles: Record<Role, string> = {
   physicien: 'Physicien médical',
   medecin: 'Radiothérapeute',
   manipulateur: 'Manipulateur',
+  partenaire: 'Partenaire',
 }
 
 export const sousTitresRoles: Record<Role, string> = {
   physicien: 'Valide les étapes, révise les verdicts, enregistre le cumul',
   medecin: 'Valide les étapes et tranche la décision ATP / ATS',
   manipulateur: 'Consultation en lecture seule',
+  partenaire: 'Consultation seule, dossiers pseudonymisés',
 }
 
 /**
@@ -74,6 +76,10 @@ export const comptesInitiaux: Compte[] = [
   { identifiant: 'm.dupas',    titre: 'M.',  nom: 'Dupas',    prenom: 'Marc',    role: 'physicien',    email: 'm.dupas@chu.fr',    statut: 'actif' },
   { identifiant: 't.perrin',   titre: 'M.',  nom: 'Perrin',   prenom: 'Théo',    role: 'manipulateur', email: 't.perrin@chu.fr',   statut: 'actif' },
   { identifiant: 'e.girard',   titre: 'Mme', nom: 'Girard',   prenom: 'Élise',   role: 'physicien',    email: 'e.girard@chu.fr',   statut: 'inactif' },
+  // Compte extérieur à l'établissement : il voit le fonctionnement de l'outil,
+  // pas l'identité des patients. Son adresse n'est pas en @chu.fr — c'est le
+  // signe qu'il n'a pas à connaître qui est traité.
+  { identifiant: 'j.aubert',   titre: 'M.',  nom: 'Aubert',   prenom: 'Julien',  role: 'partenaire',   email: 'j.aubert@partenaire.eu', statut: 'actif' },
 ]
 
 /** Nom porté par le journal de traçabilité et l'en-tête. */

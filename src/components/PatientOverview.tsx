@@ -1,9 +1,12 @@
 import { type PatientRecord } from './Dashboard'
+import type { IdentiteAffichee } from '../logic'
 
 type Moment = 'A' | 'B' | 'C' | 'D'
 
 interface Props {
   patient: PatientRecord
+  /** Déjà résolue par l'appelant, selon les droits de qui regarde. */
+  identite: IdentiteAffichee
   onGoToMoment: (m: Moment) => void
 }
 
@@ -44,7 +47,7 @@ function StepIcon({ n, state }: { n: number; state: StepState }) {
   )
 }
 
-export default function PatientOverview({ patient: p, onGoToMoment }: Props) {
+export default function PatientOverview({ patient: p, identite, onGoToMoment }: Props) {
   const sessionDate = p.seanceCourante === 4 ? "Aujourd'hui — 02 Sep 2026" : `Séance ${p.seanceCourante}`
 
   const steps: Step[] = [
@@ -123,7 +126,7 @@ export default function PatientOverview({ patient: p, onGoToMoment }: Props) {
             <span className="text-slate-200">·</span>
             <span className="text-xs font-medium text-blue-600">{sessionDate}</span>
           </div>
-          <div className="font-semibold text-slate-800">{p.nom} {p.prenom}</div>
+          <div className="font-semibold text-slate-800">{identite.libelle}</div>
           <div className="text-sm text-slate-500 mt-0.5">{p.protocole} · {p.prescription}</div>
         </div>
         <div className="flex flex-col items-end gap-2">

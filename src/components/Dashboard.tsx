@@ -2,10 +2,17 @@ import { useState, type Dispatch, type ReactNode, type SetStateAction } from 're
 import DicomRecap from './DicomRecap'
 import DimadoseLogo from './DimadoseLogo'
 import SessionRecap from './SessionRecap'
-import { DossierProvider, alertesPourDossier } from '../store'
+import { DossierProvider, alertesPourDossier, verdictsPourDossier } from '../store'
 import { versionCourte, versionDetaillee } from '../version'
 import { libellesRoles, nomAffiche, type Compte, type Role } from '../data'
 import { effacer as effacerDossierEnregistre, effacerListePatients } from '../persistence'
+import {
+  couleursCodeSeance,
+  identiteAffichee,
+  libellesCodeSeance,
+  type VerdictSeance,
+} from '../logic'
+import type { Utilisateur } from '../dossierContext'
 
 /**
  * Seul ce dossier possède des mesures par séance : ses alertes sont donc
@@ -134,6 +141,74 @@ export const patientsDemo: PatientRecord[] = [
   },
 ]
 
+/**
+ * Avancement d'un protocole, une séance par segment.
+ *
+ * La couleur ne dit pas seulement « faite » : elle porte la qualification posée
+ * par l'équipe à la fin de la séance. Une séance passée sans qualification reste
+ * verte — elle s'est déroulée sans que personne signale quoi que ce soit.
+ *
+ * Largeur totale fixe et segments proportionnels : un protocole hypofractionné
+ * (5 fr) et un normofractionné (25 fr) occupent la même place dans la colonne.
+ */
+function BarreSeances({ p }: { p: PatientRecord }) {
+  const verdicts = verdictsPourDossier(p.id)
+  // Une seule infobulle, pilotée par l'état : avec une par segment en
+  // `group-hover`, deux voisines pouvaient s'afficher ensemble et se recouvrir.
+  const [survolee, setSurvolee] = useState<number | null>(null)
+
+  const verdictSurvole = survolee === null ? undefined : verdicts[survolee]
+
+  return (
+    <div
+      className="relative mt-1.5 w-20"
+      onMouseLeave={() => setSurvolee(null)}
+    >
+      <div className={`flex ${p.totalSeances > 10 ? 'gap-px' : 'gap-0.5'}`}>
+        {Array.from({ length: p.totalSeances }).map((_, i) => {
+          const numero = i + 1
+          const verdict: VerdictSeance | undefined = verdicts[numero]
+          const passee = numero < p.seanceCourante
+          const courante = numero === p.seanceCourante && p.statut !== 'planification'
+
+          const couleur = verdict ? couleursCodeSeance[verdict.code].pastille
+            : passee ? 'bg-ok'
+            : courante ? 'bg-clinical'
+            : 'bg-slate-200'
+
+          return (
+            // La barre fait 6 px de haut : la zone sensible est agrandie sans la
+            // faire grossir, sinon le survol serait une épreuve d'adresse.
+            <div
+              key={numero}
+              className="flex-1 py-2 -my-2"
+              onMouseEnter={() => setSurvolee(numero)}
+            >
+              <div className={`h-1.5 rounded-full ${couleur}`} />
+            </div>
+          )
+        })}
+      </div>
+
+      {verdictSurvole && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-30
+            w-56 bg-app-sidebar text-white rounded-xl px-3 py-2 shadow-lg"
+        >
+          <div className="text-xs font-semibold">
+            Séance {survolee} · {libellesCodeSeance[verdictSurvole.code]}
+          </div>
+          {verdictSurvole.commentaire && (
+            <div className="text-xs opacity-80 mt-1 leading-snug">{verdictSurvole.commentaire}</div>
+          )}
+          <div className="text-[10px] opacity-50 mt-1">{verdictSurvole.par}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const actionLabels: Record<PatientRecord['action'], { label: string; style: string }> = {
   'decision-en-seance': { label: 'Décision en séance',  style: 'bg-warn-bg text-warn border border-warn-border' },
   'validation-requise': { label: 'Validation requise',  style: 'bg-clinical-light text-clinical border border-clinical-border' },
@@ -211,7 +286,16 @@ interface Props {
   onSelectPatient: (p: PatientRecord) => void
   userName: string
   userRole: string
+  /** Porté au provider des fenêtres de récap : elles héritent ainsi des droits. */
+  utilisateur: Utilisateur
   readOnly?: boolean
+  /**
+   * Voir qui sont les patients. Faux pour un partenaire extérieur : la liste
+   * affiche alors des codes de dossier, jamais un nom ni une date de naissance.
+   */
+  voitIdentite?: boolean
+  /** Créer ou supprimer un dossier. */
+  peutGererPatients?: boolean
   onLogout: () => void
 }
 
@@ -221,6 +305,8 @@ const roleColors: Record<Role, string> = {
   physicien:    'bg-clinical-light text-clinical border border-clinical-border',
   medecin:      'bg-blue-50 text-blue-700 border border-blue-200',
   manipulateur: 'bg-slate-100 text-slate-600 border border-slate-200',
+  // Violet : extérieur à l'établissement, distinct des trois profils soignants.
+  partenaire:   'bg-violet-50 text-violet-700 border border-violet-200',
 }
 
 
@@ -524,10 +610,18 @@ export default function Dashboard({
   onSelectPatient,
   userName,
   userRole,
+  utilisateur,
   readOnly = false,
+  voitIdentite = true,
+  peutGererPatients = !readOnly,
   onLogout,
 }: Props) {
   const [navPage, setNavPage] = useState<NavPage>('dashboard')
+
+  // L'annuaire du personnel porte des noms et des adresses professionnelles.
+  // Masquer l'identité des patients à un partenaire tout en lui ouvrant la
+  // liste des soignants n'aurait pas de sens : il ne voit que le tableau.
+  const pagesVisibles = voitIdentite ? navItems : navItems.filter(i => i.id === 'dashboard')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'tous' | PatientRecord['statut']>('tous')
   const [showModal, setShowModal] = useState(false)
@@ -539,7 +633,7 @@ export default function Dashboard({
 
   // Le titre de l'en-tête suit la page ouverte : « Tableau de bord » figé était
   // faux dès qu'on allait dans le guide ou la gestion des utilisateurs.
-  const pageCourante = navItems.find(i => i.id === navPage) ?? navItems[0]
+  const pageCourante = pagesVisibles.find(i => i.id === navPage) ?? pagesVisibles[0]
 
   // Comparer aussi le contenu : jouer des séances modifie les dossiers sans
   // toucher à la composition de la liste, et il faut pouvoir revenir au
@@ -704,7 +798,7 @@ export default function Dashboard({
           </div>
 
           <div className="flex-1 px-3 flex flex-col gap-1">
-            {navItems.map(item => {
+            {pagesVisibles.map(item => {
               const isCurrent = navPage === item.id
               return (
                 <button
@@ -754,7 +848,9 @@ export default function Dashboard({
 
         {/* ── Main content ── */}
         <div className="flex-1 overflow-y-auto">
-          {navPage === 'utilisateurs' && <UsersPage comptes={comptes} setComptes={setComptes} readOnly={readOnly} />}
+          {navPage === 'utilisateurs' && voitIdentite && (
+            <UsersPage comptes={comptes} setComptes={setComptes} readOnly={readOnly} />
+          )}
           {navPage === 'dashboard'   && (
       <main className="p-6 flex flex-col gap-5">
 
@@ -788,8 +884,8 @@ export default function Dashboard({
                   className="flex items-center justify-between bg-white border border-warn-border rounded-2xl px-4 py-3 hover:bg-warn-bg/50 transition-colors text-left group"
                 >
                   <div className="flex items-center gap-4">
-                    <span className="font-semibold text-slate-800 text-sm">{p.nom} {p.prenom}</span>
-                    <span className="font-mono text-xs text-slate-400">{p.id}</span>
+                    <span className="font-semibold text-slate-800 text-sm">{identiteAffichee(p, voitIdentite).libelle}</span>
+                    <span className="font-mono text-xs text-slate-400">{identiteAffichee(p, voitIdentite).identifiant}</span>
                     <span className="text-xs text-slate-500">S{p.seanceCourante}/{p.totalSeances} · {p.protocole}</span>
                     {alertesAffichees(p).slice(0, 1).map((a, i) => (
                       <span key={i} className="text-xs text-danger-text bg-danger-bg border border-danger-border px-2 py-0.5 rounded-full">{a}</span>
@@ -862,8 +958,11 @@ export default function Dashboard({
                   onClick={() => onSelectPatient(p)}
                 >
                   <td className="px-5 py-3.5">
-                    <div className="font-semibold text-slate-800">{p.nom} {p.prenom}</div>
-                    <div className="font-mono text-xs text-slate-400 mt-0.5">{p.id} · {p.ddn}</div>
+                    <div className="font-semibold text-slate-800">{identiteAffichee(p, voitIdentite).libelle}</div>
+                    <div className="font-mono text-xs text-slate-400 mt-0.5">
+                      {identiteAffichee(p, voitIdentite).identifiant}
+                      {voitIdentite && <> · {p.ddn}</>}
+                    </div>
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="text-slate-700 font-medium text-xs">{p.protocole}</div>
@@ -877,18 +976,7 @@ export default function Dashboard({
                       </span>
                       <span className="font-mono text-xs text-slate-400">/ {p.totalSeances}</span>
                     </div>
-                    {/* Largeur totale fixe, segments proportionnels : un protocole
-                        hypofractionné (5 fr) et un protocole normofractionné (25 fr)
-                        occupent la même place dans la colonne. */}
-                    <div className={`flex mt-1.5 w-20 ${p.totalSeances > 10 ? 'gap-px' : 'gap-0.5'}`}>
-                      {Array.from({ length: p.totalSeances }).map((_, i) => (
-                        <div key={i} className={`flex-1 h-1.5 rounded-full ${
-                          i < p.seanceCourante - 1 ? 'bg-ok' :
-                          i === p.seanceCourante - 1 && p.statut !== 'planification' ? 'bg-clinical' :
-                          'bg-slate-200'
-                        }`} />
-                      ))}
-                    </div>
+                    <BarreSeances p={p} />
                   </td>
                   {/* Étape courante du workflow */}
                   <td className="px-5 py-3.5">
@@ -965,11 +1053,11 @@ export default function Dashboard({
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-end gap-1">
-                      {!readOnly && (
+                      {peutGererPatients && (
                         <button
                           onClick={e => { e.stopPropagation(); setASupprimer(p) }}
-                          title={`Supprimer le dossier de ${p.nom} ${p.prenom}`}
-                          aria-label={`Supprimer le dossier de ${p.nom} ${p.prenom}`}
+                          title={`Supprimer le dossier ${identiteAffichee(p, voitIdentite).libelle}`}
+                          aria-label={`Supprimer le dossier ${identiteAffichee(p, voitIdentite).libelle}`}
                           className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-7 h-7 rounded-xl flex items-center justify-center text-slate-300 hover:text-danger hover:bg-danger-bg transition-all"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -1177,9 +1265,9 @@ export default function Dashboard({
               <div className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-0.5">
                 Suppression d'un dossier
               </div>
-              <div className="text-lg font-bold">{aSupprimer.nom} {aSupprimer.prenom}</div>
+              <div className="text-lg font-bold">{identiteAffichee(aSupprimer, voitIdentite).libelle}</div>
               <div className="text-xs opacity-60 mt-0.5 font-mono">
-                {aSupprimer.id} · {aSupprimer.protocole} · S{aSupprimer.seanceCourante}/{aSupprimer.totalSeances}
+                {identiteAffichee(aSupprimer, voitIdentite).identifiant} · {aSupprimer.protocole} · S{aSupprimer.seanceCourante}/{aSupprimer.totalSeances}
               </div>
             </div>
 
@@ -1225,6 +1313,7 @@ export default function Dashboard({
       {dicomPatient && (
         <DossierProvider
           dossierId={dicomPatient.id}
+          utilisateur={utilisateur}
           seanceInitiale={Math.max(dicomPatient.seanceCourante, 1)}
         >
           <DicomRecap patient={dicomPatient} onClose={() => setDicomPatient(null)} />
@@ -1233,7 +1322,11 @@ export default function Dashboard({
 
       {/* ── Récap des séances (étapes + traçabilité) ── */}
       {recapPatient && (
-        <SessionRecap patient={recapPatient} onClose={() => setRecapPatient(null)} />
+        <SessionRecap
+          patient={recapPatient}
+          identite={identiteAffichee(recapPatient, voitIdentite)}
+          onClose={() => setRecapPatient(null)}
+        />
       )}
     </div>
   )

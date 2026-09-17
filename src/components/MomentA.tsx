@@ -49,6 +49,7 @@ const modesCumul: { val: ModeCumul; label: string; sub: string }[] = [
 
 export default function MomentA() {
   const d = useDossier()
+  const identite = d.identite(dossier)
   const evaluables = d.seances.filter(s => s.realisee)
   const [selection, setSelection] = useState(
     evaluables.find(s => !s.validee)?.numero ?? evaluables[evaluables.length - 1]?.numero ?? 1,
@@ -567,8 +568,8 @@ export default function MomentA() {
 
         <div className="mt-3 bg-white border border-slate-200 rounded-sm p-3 text-xs text-slate-500">
           <div className="font-semibold text-slate-600 mb-1">Dossier</div>
-          <div>{dossier.nom} {dossier.prenom}</div>
-          <div className="font-mono text-slate-400">{dossier.id}</div>
+          <div>{identite.libelle}</div>
+          <div className="font-mono text-slate-400">{identite.identifiant}</div>
           <div className="mt-1">{dossier.protocole}</div>
           <div className="text-slate-400">
             {formatNombre(dossier.prescriptionTotale)} Gy / {dossier.nbSeances} fr

@@ -32,6 +32,9 @@ import {
   cumuler,
   droits as calculerDroits,
   evaluerSeances,
+  identiteAffichee,
+  verdictIncomplet,
+  libellesCodeSeance,
   labelDeformation,
   labelModeCumul,
   labelQualite,
@@ -42,6 +45,9 @@ import {
   type CandidateDose,
   type Decisions,
   type EntreeTrace,
+  type CodeSeance,
+  type VerdictSeance,
+  type IdentiteDossier,
   type ModeCumul,
   type VerdictDeformation,
   type VerdictQualite,
@@ -77,6 +83,24 @@ export function alertesPourDossier(dossierId: string, seanceCourante: number) {
     alertes: alertesDossier(cumul, recommanderVoie(seances, cumul, numero)),
     confiance: cumul.confiance,
   }
+}
+
+/**
+ * Les qualifications de séance d'un dossier, pour le tableau de bord.
+ *
+ * Le tableau de bord vit hors du provider : il lit l'état enregistré, comme
+ * pour les alertes. Un dossier jamais ouvert n'a pas de qualification — la
+ * séance reste alors sans couleur, ce qui est la vérité : personne ne s'est
+ * prononcé.
+ */
+export function verdictsPourDossier(dossierId: string): Record<number, VerdictSeance> {
+  const etat = charger(dossierId)
+  const decisions = etat?.decisions ?? decisionsEnregistrees
+  const verdicts: Record<number, VerdictSeance> = {}
+  for (const [numero, d] of Object.entries(decisions)) {
+    if (d?.verdict) verdicts[Number(numero)] = d.verdict
+  }
+  return verdicts
 }
 
 export function DossierProvider({
@@ -155,6 +179,13 @@ export function DossierProvider({
   const alertes = useMemo(() => alertesDossier(cumul, recommandation), [cumul, recommandation])
 
   const droits = useMemo(() => calculerDroits(utilisateur.role), [utilisateur.role])
+
+  // Lié aux droits une fois pour toutes : un écran ne peut pas se tromper de
+  // second argument, ni oublier de poser la question.
+  const identite = useCallback(
+    (p: IdentiteDossier) => identiteAffichee(p, droits.voitIdentitePatient),
+    [droits.voitIdentitePatient],
+  )
 
   const editions = contraintesEditees[seanceCourante] ?? {}
 
@@ -286,6 +317,33 @@ export function DossierProvider({
       })
     },
 
+    /**
+     * Qualification de la séance en fin de workflow : un code couleur et ce qui
+     * s'est passé. C'est un acte humain, donc il part au journal — et comme
+     * tout acte, il porte son auteur.
+     */
+    qualifierSeance: (numero: number, code: CodeSeance, commentaire: string) => {
+      const texte = commentaire.trim()
+      if (verdictIncomplet(code, texte)) return
+      patch(numero, {
+        verdict: {
+          code,
+          commentaire: texte,
+          par: utilisateur.nom,
+          horodatage: new Date().toISOString(),
+        },
+      })
+      tracer({
+        categorie: 'validation',
+        seance: numero,
+        libelle: `Séance ${numero} qualifiée « ${libellesCodeSeance[code].toLowerCase()} »`,
+        detail: texte || undefined,
+        // Le rouge et l'orange signalent une séance qui n'a pas suivi le cours
+        // attendu : le journal doit les distinguer d'une séance ordinaire.
+        ecart: code !== 'vert',
+      })
+    },
+
     devaliderSeance: (numero: number) => {
       patch(numero, { validee: false })
       tracer({
@@ -357,7 +415,7 @@ export function DossierProvider({
           + labelReferentiel(id),
       })
     },
-  }), [patch, tracer, seance, recommandation, seanceCourante])
+  }), [patch, tracer, seance, recommandation, seanceCourante, utilisateur.nom])
 
   const editerContrainte = useCallback((structureId: string, valeurSaisie: number) => {
     setContraintesEditees(prev => ({
@@ -406,6 +464,7 @@ export function DossierProvider({
     dossierId,
     utilisateur,
     droits,
+    identite,
     seanceCourante,
     decisions,
     critere,
@@ -435,7 +494,7 @@ export function DossierProvider({
     reinitialiserContrainte,
     reinitialiserContraintes,
   }), [
-    dossierId, utilisateur, droits, seanceCourante, decisions, critere, irmref,
+    dossierId, utilisateur, droits, identite, seanceCourante, decisions, critere, irmref,
     contraintesEditees, trace, seances, seance, cumul, cumulJusqua, recommandation,
     propositions, valeurContrainte, contraintesModifiees, rapport, alertes,
     persistant, enregistreLe, reinitialiser, tracer, actions,

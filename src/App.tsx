@@ -11,9 +11,10 @@ import StepGating from './components/steps/StepGating'
 import StepValidateBar from './components/StepValidateBar'
 import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
 import DicomRecap from './components/DicomRecap'
+import QualifierSeance from './components/QualifierSeance'
 import { DossierProvider, useDossier } from './store'
 import { comptesInitiaux, libellesRoles, type Compte, type Role, type Voie } from './data'
-import { etatApresSeance, formatDateCourte, formatHorodatage } from './logic'
+import { droits as calculerDroits, etatApresSeance, formatDateCourte, formatHorodatage } from './logic'
 import {
   chargerComptes,
   chargerListePatients,
@@ -52,9 +53,15 @@ export default function App() {
 
   // Annuaire des comptes : la tracabilite nomme une personne, donc l'annuaire
   // doit survivre au rechargement comme la liste des patients.
-  const [comptes, setComptes] = useState<Compte[]>(
-    () => chargerComptes<Compte>() ?? comptesInitiaux,
-  )
+  const [comptes, setComptes] = useState<Compte[]>(() => {
+    const enregistres = chargerComptes<Compte>()
+    if (!enregistres) return comptesInitiaux
+    // Un annuaire enregistré avant l'ajout d'un profil ne le contiendrait pas :
+    // le profil resterait invisible sur les postes déjà utilisés. On complète
+    // par identifiant, sans toucher aux comptes existants ni à leur statut.
+    const connus = new Set(enregistres.map(c => c.identifiant))
+    return [...enregistres, ...comptesInitiaux.filter(c => !connus.has(c.identifiant))]
+  })
 
   useEffect(() => { sauvegarderListePatients(patients) }, [patients])
   useEffect(() => { sauvegarderComptes(comptes) }, [comptes])
@@ -91,7 +98,10 @@ export default function App() {
         onSelectPatient={handleSelectPatient}
         userName={user.name}
         userRole={libellesRoles[user.role]}
-        readOnly={user.role === 'manipulateur'}
+        utilisateur={{ nom: user.name, role: user.role }}
+        readOnly={calculerDroits(user.role).lectureSeule}
+        voitIdentite={calculerDroits(user.role).voitIdentitePatient}
+        peutGererPatients={calculerDroits(user.role).peutGererPatients}
         onLogout={() => { setUser(null); setView('login') }}
       />
     )
@@ -258,7 +268,7 @@ function PatientView({
           </button>
           <span className="text-white/20 text-xs">/</span>
           <span className="text-xs text-white/90 font-medium truncate max-w-48">
-            {p.nom} {p.prenom}
+            {d.identite(p).libelle}
           </span>
         </div>
 
@@ -423,6 +433,10 @@ function PatientView({
                 />
 
                 {workflowDone && validatedSteps.has('step-4') && (
+                  <QualifierSeance seance={sessionNum} peutQualifier={droits.peutValiderEtape} />
+                )}
+
+                {workflowDone && validatedSteps.has('step-4') && (
                   <div className="max-w-4xl mx-auto w-full bg-app-sidebar rounded-3xl px-6 py-5 text-white flex items-center justify-between gap-4">
                     <div>
                       <div className="text-sm font-bold flex items-center gap-2">
@@ -510,7 +524,7 @@ function PatientView({
               <div className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-0.5">
                 Réinitialisation
               </div>
-              <div className="text-lg font-bold">{p.nom} {p.prenom}</div>
+              <div className="text-lg font-bold">{d.identite(p).libelle}</div>
             </div>
             <div className="p-6 flex flex-col gap-4">
               <p className="text-sm text-slate-600 leading-relaxed">

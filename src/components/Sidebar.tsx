@@ -43,6 +43,8 @@ export default function Sidebar({
 
   const moments = etatsMoments(d.seances, d.recommandation, seance, p.totalSeances)
 
+  const identite = d.identite(p)
+
   // Le dossier patient a avancé, mais le workflow de la séance suivante n'est
   // pas encore ouvert : les deux numéros diffèrent légitimement.
   const seanceTerminee = p.seanceCourante > seance
@@ -52,8 +54,8 @@ export default function Sidebar({
 
       {/* Patient card */}
       <div className="mx-3 mt-3 mb-2 bg-white/8 rounded-2xl p-4 border border-white/8">
-        <div className="font-bold text-white text-sm leading-tight">{p.nom} {p.prenom}</div>
-        <div className="text-xs font-mono text-white/40 mt-0.5">{p.id}</div>
+        <div className="font-bold text-white text-sm leading-tight">{identite.libelle}</div>
+        <div className="text-xs font-mono text-white/40 mt-0.5">{identite.identifiant}</div>
         <div className="text-xs text-white/50 mt-1">{p.protocole}</div>
         <div className="text-xs text-white/40">{p.prescription}</div>
 

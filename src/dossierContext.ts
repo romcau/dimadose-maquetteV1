@@ -15,7 +15,10 @@ import type {
   Cumul,
   Decisions,
   Droits,
+  CodeSeance,
   EntreeTrace,
+  IdentiteAffichee,
+  IdentiteDossier,
   ModeCumul,
   PropositionContrainte,
   Rapport,
@@ -44,6 +47,12 @@ export interface DossierContexte {
   dossierId: string
   utilisateur: Utilisateur
   droits: Droits
+  /**
+   * Comment nommer un dossier à l'écran, selon les droits de qui regarde.
+   * Passer par là plutôt que d'afficher `nom`, `prenom` ou `id` directement :
+   * c'est ce qui garantit qu'aucun écran n'oublie de masquer l'identité.
+   */
+  identite: (p: IdentiteDossier) => IdentiteAffichee
   seanceCourante: number
   decisions: Decisions
   critere: CritereComparaison
@@ -86,6 +95,8 @@ export interface DossierContexte {
   choisirModeCumul: (numero: number, m: ModeCumul) => void
   choisirDose: (numero: number, d: CandidateDose) => void
   validerSeance: (numero: number) => void
+  /** Qualifie la séance en fin de workflow : code couleur et ce qui s'est passé. */
+  qualifierSeance: (numero: number, code: CodeSeance, commentaire: string) => void
   devaliderSeance: (numero: number) => void
   demanderReacquisition: (numero: number, demandee: boolean) => void
   enregistrerVoie: (numero: number, voie: Voie, motifs?: string[], texte?: string) => void
