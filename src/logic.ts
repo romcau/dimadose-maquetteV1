@@ -81,6 +81,14 @@ export interface DecisionsSeance {
    */
   /** Ce que l'équipe rapporte de la délivrance — voir `SuiviGating`. */
   gating?: SuiviGating
+  /**
+   * Commentaire libre laissé au bas d'une étape, par identifiant d'étape.
+   *
+   * Facultatif, et destiné à la séance suivante : c'est ce qu'un opérateur
+   * dirait de vive voix à celui qui prendra la main demain, et que rien
+   * d'autre ne transporte. Repris au rapport de traitement.
+   */
+  commentairesEtape?: Record<string, string>
   atpOptionnel?: {
     /** Plan effectivement délivré, s'il diffère du plan de référence. */
     rtplan?: boolean

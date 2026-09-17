@@ -104,6 +104,8 @@ export interface DossierContexte {
   validerSeance: (numero: number) => void
   /** Observations libres de la séance : recalage, affectation de densité. */
   noterSeance: (numero: number, champ: 'recalage' | 'densites', texte: string) => void
+  /** Commentaire de fin d'étape, adressé à la séance suivante. */
+  commenterEtape: (numero: number, etape: string, texte: string) => void
   /** Données facultatives rechargées après une séance ATP. */
   chargerOptionnelATP: (numero: number, objet: 'rtplan' | 'rtdose' | 'irmv', charge: boolean) => void
   /** Ce que l'équipe rapporte de la délivrance : gating, seuil, durée. */

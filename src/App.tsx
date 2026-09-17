@@ -13,6 +13,8 @@ import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
 import DicomRecap from './components/DicomRecap'
 import QualifierSeance from './components/QualifierSeance'
 import DecisionModal from './components/DecisionModal'
+import CommentaireEtape from './components/CommentaireEtape'
+import CommentairesPrecedents from './components/CommentairesPrecedents'
 import { DossierProvider, useDossier } from './store'
 import { comptesInitiaux, libellesRoles, type Compte, type Role, type Voie } from './data'
 import { droits as calculerDroits, etatApresSeance, formatDateCourte, formatHorodatage } from './logic'
@@ -258,6 +260,22 @@ function PatientView({
    */
   const decisionRequise = droits.peutDeciderVoie && !decisionVue
 
+  const ORDRE: Page[] = ['step-1', 'step-2', 'step-3', 'step-4']
+
+  /**
+   * Revenir à l'étape précédente en annulant celle-ci.
+   *
+   * « Annuler » au sens propre : la validation de l'étape quittée est levée,
+   * et le journal l'enregistre. Rien d'autre n'est perdu — les saisies restent.
+   */
+  const revenirEnArriere = () => {
+    const i = ORDRE.indexOf(page)
+    if (i <= 0) return
+    unvalidate(page)
+    if (page === 'step-3') setWorkflowDone(false)
+    setPage(ORDRE[i - 1])
+  }
+
   const allerA = (cible: Page) => {
     if (cible === 'step-3' && decisionRequise) { setDecisionModalOpen(true); return }
     setPage(cible)
@@ -410,6 +428,8 @@ function PatientView({
           />
 
           <div className="flex-1 overflow-y-auto p-6">
+            <CommentairesPrecedents seance={sessionNum} />
+
             {page === 'step-1' && (
               <>
                 <StepPlanning
@@ -425,6 +445,7 @@ function PatientView({
                   onNext={() => { validate('step-1'); setPage('step-2') }}
                   canValidate={droits.peutValiderEtape}
                 />
+                <CommentaireEtape seance={sessionNum} etape="step-1" modifiable={droits.peutValiderEtape} />
               </>
             )}
 
@@ -442,7 +463,9 @@ function PatientView({
                   nextLabel={stepNextLabel['step-2']}
                   onNext={goToAdaptation}
                   canValidate={droits.peutValiderEtape}
+                  onBack={revenirEnArriere}
                 />
+                <CommentaireEtape seance={sessionNum} etape="step-2" modifiable={droits.peutValiderEtape} />
               </>
             )}
 
@@ -460,7 +483,9 @@ function PatientView({
                   nextLabel={stepNextLabel['step-3']}
                   onNext={() => { validate('step-3'); setPage('step-4') }}
                   canValidate={droits.peutValiderEtape}
+                  onBack={revenirEnArriere}
                 />
+                <CommentaireEtape seance={sessionNum} etape="step-3" modifiable={droits.peutValiderEtape} />
               </>
             )}
 
@@ -472,7 +497,9 @@ function PatientView({
                   onValidate={() => { validate('step-4'); terminerSeance() }}
                   onUnvalidate={() => { unvalidate('step-4'); setWorkflowDone(false) }}
                   canValidate={droits.peutValiderEtape}
+                  onBack={revenirEnArriere}
                 />
+                <CommentaireEtape seance={sessionNum} etape="step-4" modifiable={droits.peutValiderEtape} />
 
                 {workflowDone && validatedSteps.has('step-4') && (
                   <QualifierSeance seance={sessionNum} peutQualifier={droits.peutValiderEtape} />

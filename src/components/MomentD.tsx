@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { dossier, formatNombre } from '../data'
+import { dossier, formatNombre, libellesEtapes } from '../data'
 import {
   exporterTrace,
   fmtSigne,
@@ -45,6 +45,15 @@ const fondEvenement: Record<Niveau, string> = {
 export default function MomentD() {
   const d = useDossier()
   const identite = d.identite(dossier)
+
+  // Les commentaires d'étape, regroupés par séance et dans l'ordre du protocole.
+  const commentairesParSeance = Object.entries(d.decisions)
+    .map(([numero, dec]) => ({
+      seance: Number(numero),
+      entrees: Object.entries(dec?.commentairesEtape ?? {}).filter(([, texte]) => texte.trim().length > 0),
+    }))
+    .filter(x => x.entrees.length > 0)
+    .sort((a, b) => a.seance - b.seance)
   const r = d.rapport
   const [structureTracee, setStructureTracee] = useState('rectum-d05')
   const [journalExporte, setJournalExporte] = useState(false)
@@ -228,6 +237,34 @@ export default function MomentD() {
           <span className="ml-auto"><ConfianceIndicator niveau={r.recap.confiance} motifs={cumulFinal.motifsConfiance} /></span>
         </div>
       </Card>
+
+      {/* ── Ce que les équipes se sont transmis ── */}
+      {commentairesParSeance.length > 0 && (
+        <Card className="p-5">
+          <SectionTitle>Commentaires laissés en séance</SectionTitle>
+          <div className="text-xs text-slate-500 mt-1 mb-3">
+            Écrits à l'intention de la séance suivante. Rien ne les calcule : ils disent ce que les
+            chiffres du tableau ne portent pas.
+          </div>
+          <div className="flex flex-col gap-3">
+            {commentairesParSeance.map(({ seance, entrees }) => (
+              <div key={seance} className="border-l-2 border-slate-200 pl-4">
+                <div className="text-xs font-bold text-slate-600 mb-1">Séance {seance}</div>
+                <div className="flex flex-col gap-1.5">
+                  {entrees.map(([etape, texte]) => (
+                    <div key={etape} className="flex items-start gap-3">
+                      <span className="text-xs text-slate-400 shrink-0 w-28 pt-0.5">
+                        {libellesEtapes[etape] ?? etape}
+                      </span>
+                      <span className="text-sm text-slate-700 leading-snug">{texte}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* ── Dose cumulée finale ── */}
       <Card className="p-5">

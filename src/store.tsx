@@ -432,6 +432,28 @@ export function DossierProvider({
       })
     },
 
+    /**
+     * Commentaire de fin d'étape, adressé à la séance suivante.
+     *
+     * Tracé comme une observation : il n'engage aucune dose, mais il explique
+     * ce que les chiffres ne disent pas.
+     */
+    commenterEtape: (numero: number, etape: string, texte: string) => {
+      const propre = texte.trim()
+      patch(numero, {
+        commentairesEtape: { ...decisions[numero]?.commentairesEtape, [etape]: propre },
+      })
+      const nom = libellesEtapes[etape] ?? etape
+      tracer({
+        categorie: 'note',
+        seance: numero,
+        libelle: propre
+          ? `Commentaire laissé sur l'étape ${nom} (séance ${numero})`
+          : `Commentaire retiré de l'étape ${nom} (séance ${numero})`,
+        detail: propre || undefined,
+      })
+    },
+
     devaliderSeance: (numero: number) => {
       patch(numero, { validee: false })
       tracer({
