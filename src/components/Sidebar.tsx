@@ -72,7 +72,9 @@ export default function Sidebar({
             {Array.from({ length: p.totalSeances }).map((_, i) => (
               <div key={i} className={`flex-1 h-1.5 rounded-full ${
                 i < seance - 1 ? 'bg-ok' :
-                i === seance - 1 ? 'bg-clinical-mid' : 'bg-white/10'
+                // Sur le fond sombre de la barre, le bleu de la marque
+                // disparaîtrait : c'est le bleu clair du logo qui ressort.
+                i === seance - 1 ? 'bg-marque-cyan' : 'bg-white/10'
               }`} />
             ))}
           </div>
