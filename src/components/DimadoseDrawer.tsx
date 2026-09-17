@@ -33,6 +33,15 @@ export default function DimadoseDrawer({ open, onClose, onAtsConfirmed }: Props)
 
   const meta = momentMeta[open]
 
+  /**
+   * Le rapport s'ouvre au centre, les autres moments sur le côté.
+   *
+   * Les moments A, B et C accompagnent le travail en cours : un panneau
+   * latéral laisse voir l'écran auquel ils se rapportent. Le rapport, lui, est
+   * un document qu'on lit pour lui-même — il occupe le centre.
+   */
+  const auCentre = open === 'moment-D'
+
   return (
     <>
       {/* Backdrop */}
@@ -41,8 +50,14 @@ export default function DimadoseDrawer({ open, onClose, onAtsConfirmed }: Props)
         onClick={onClose}
       />
 
-      {/* Drawer panel — slides in from right */}
-      <div className="fixed inset-y-0 right-0 z-50 flex flex-col w-[72%] max-w-5xl bg-app-bg">
+      <div
+        className={auCentre
+          ? 'fixed inset-0 z-50 flex items-center justify-center p-6 pointer-events-none'
+          : 'contents'}
+      >
+      <div className={auCentre
+        ? 'flex flex-col w-full max-w-5xl max-h-full bg-app-bg rounded-3xl overflow-hidden pointer-events-auto'
+        : 'fixed inset-y-0 right-0 z-50 flex flex-col w-[72%] max-w-5xl bg-app-bg'}>
 
         {/* Drawer header */}
         <div className="bg-app-sidebar flex items-center justify-between px-6 py-4 shrink-0 border-b border-white/8">
@@ -77,6 +92,7 @@ export default function DimadoseDrawer({ open, onClose, onAtsConfirmed }: Props)
           {open === 'moment-C' && <MomentC />}
           {open === 'moment-D' && <MomentD />}
         </div>
+      </div>
       </div>
     </>
   )

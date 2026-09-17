@@ -1,9 +1,10 @@
 /* ─────────────────────────────────────────────────────────────────────────────
  * Étape 5 — Données supplémentaires (post-traitement) et clôture de la séance.
  *
- * Trois gestes, dans cet ordre : charger l'IRM de contrôle si elle existe,
- * finaliser la séance — ce qui ouvre le rapport —, puis clôturer et revenir au
- * tableau de bord.
+ * Trois gestes, dans cet ordre : finaliser la séance, consulter son rapport,
+ * la clôturer. Les deux derniers restent inertes tant que la première n'est
+ * pas faite — ils n'auraient rien à montrer, et rien à fermer. Avant eux,
+ * l'IRM de contrôle si elle a été acquise.
  *
  * Pas de validation d'étape ici : la séance est délivrée, il n'y a plus rien à
  * vérifier avant de passer à la suite. Il reste à l'enregistrer et à partir.
@@ -23,8 +24,10 @@ interface Props {
   finalisee: boolean
   prochaineSeance: string
   onChangerProchaineSeance: (iso: string) => void
-  /** Finalise la séance et ouvre le rapport de traitement. */
+  /** Inscrit la séance au dossier. Débloque les deux gestes suivants. */
   onFinaliser: () => void
+  /** Ouvre le rapport de la séance. */
+  onConsulterRapport: () => void
   /** Ferme le dossier et revient au tableau de bord. */
   onCloturer: () => void
   peutSaisir: boolean
@@ -33,7 +36,7 @@ interface Props {
 export default function StepDonneesSupplementaires({
   sessionNum, totalSeances, voie, finalisee,
   prochaineSeance, onChangerProchaineSeance,
-  onFinaliser, onCloturer, peutSaisir,
+  onFinaliser, onConsulterRapport, onCloturer, peutSaisir,
 }: Props) {
   const d = useDossier()
   const chargee = d.decisions[sessionNum]?.irmPostTraitement === true
@@ -101,34 +104,67 @@ export default function StepDonneesSupplementaires({
           <div className="text-xs text-slate-400 mt-0.5">
             {finalisee
               ? 'Séance enregistrée — le tableau de bord est à jour.'
-              : `Voie retenue : ${voie ?? 'non tranchée'}. Finaliser inscrit la séance au dossier et ouvre le rapport.`}
+              : `Voie retenue : ${voie ?? 'non tranchée'}. Finaliser inscrit la séance au dossier.`}
           </div>
         </div>
 
         <div className="p-5 flex flex-col gap-4">
-          {/* 1 — Finaliser : la séance entre au dossier, le rapport s'ouvre */}
+
+          {/* Les trois gestes de la clôture, dans l'ordre. Les deux derniers
+              restent inertes tant que la séance n'est pas finalisée : ils
+              n'auraient rien à montrer, et rien à fermer. */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={onFinaliser}
-              disabled={!peutSaisir}
-              className="flex items-center gap-2 bg-clinical hover:bg-clinical-mid disabled:opacity-40
-                disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2.5 rounded-2xl transition-colors"
+              disabled={!peutSaisir || finalisee}
+              className="flex items-center gap-2 bg-clinical hover:bg-clinical-mid
+                disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed
+                text-white text-sm font-semibold px-5 py-2.5 rounded-2xl transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
-              {finalisee ? `Revoir le rapport de la séance ${sessionNum}` : `Finaliser la séance ${sessionNum}`}
+              Finaliser la séance {sessionNum}
             </button>
-            {!peutSaisir && (
-              <span className="text-xs text-slate-400">
-                Réservé au physicien et au radiothérapeute.
-              </span>
-            )}
+
+            <button
+              onClick={onConsulterRapport}
+              disabled={!finalisee}
+              title={finalisee ? undefined : 'Disponible une fois la séance finalisée'}
+              className="text-sm font-semibold px-5 py-2.5 rounded-2xl border transition-colors
+                enabled:border-slate-200 enabled:text-slate-600 enabled:hover:bg-slate-50
+                disabled:border-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed"
+            >
+              Consulter le rapport de la séance
+            </button>
+
+            <button
+              onClick={() => {
+                if (commentaireModifie) d.commenterEtape(sessionNum, 'step-5', commentaire)
+                onCloturer()
+              }}
+              disabled={!finalisee}
+              title={finalisee ? undefined : 'Disponible une fois la séance finalisée'}
+              className="flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl transition-colors
+                enabled:bg-app-sidebar enabled:hover:bg-app-sidebar/80 enabled:text-white
+                disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed"
+            >
+              Clôturer la séance
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
+
+          {!peutSaisir && (
+            <div className="text-xs text-slate-400">
+              Finaliser une séance est réservé au physicien et au radiothérapeute.
+            </div>
+          )}
 
           {finalisee && (
             <>
-              {/* 2 — La date de la suivante, sans objet à la dernière séance */}
+              {/* La date de la suivante, sans objet à la dernière séance */}
               {!derniereSeance && (
                 <label className="flex flex-col gap-1.5 max-w-xs border-t border-slate-100 pt-4">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -150,7 +186,8 @@ export default function StepDonneesSupplementaires({
                 </label>
               )}
 
-              {/* Un mot pour la séance suivante, comme aux autres étapes */}
+              {/* Un mot pour la séance suivante, comme aux autres étapes.
+                  « Clôturer » l'enregistre au passage. */}
               {peutSaisir && (
                 <div className="border-t border-slate-100 pt-4">
                   {!ouvert ? (
@@ -175,42 +212,16 @@ export default function StepDonneesSupplementaires({
                         className="mt-1.5 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
                           focus:outline-none focus:border-clinical"
                       />
-                      {commentaireModifie && (
-                        <button
-                          type="button"
-                          onClick={() => d.commenterEtape(sessionNum, 'step-5', commentaire)}
-                          className="mt-2 text-xs px-3 py-1.5 bg-clinical hover:bg-clinical-mid text-white
-                            rounded-xl font-semibold transition-colors"
-                        >
-                          Enregistrer le commentaire
-                        </button>
-                      )}
                     </>
                   )}
                 </div>
               )}
 
-              {/* 3 — Clôturer et repartir */}
-              <div className="border-t border-slate-100 pt-4 flex items-center justify-between gap-4 flex-wrap">
-                <div className="text-xs text-slate-400 leading-relaxed max-w-md">
-                  {derniereSeance
-                    ? 'Dernière séance du protocole : le rapport de fin de traitement reste accessible depuis le dossier.'
-                    : `L'évaluation inter-séance de la séance ${sessionNum} reste à valider (moment A), `
-                      + 'hors ligne, avant la séance suivante.'}
-                </div>
-                <button
-                  onClick={() => {
-                    if (commentaireModifie) d.commenterEtape(sessionNum, 'step-5', commentaire)
-                    onCloturer()
-                  }}
-                  className="flex items-center gap-2 bg-app-sidebar hover:bg-app-sidebar/80 text-white
-                    text-sm font-semibold px-5 py-2.5 rounded-2xl transition-colors shrink-0"
-                >
-                  Clôturer la séance
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+              <div className="text-xs text-slate-400 leading-relaxed border-t border-slate-100 pt-3">
+                {derniereSeance
+                  ? 'Dernière séance du protocole : le rapport de fin de traitement reste accessible depuis le dossier.'
+                  : `L'évaluation inter-séance de la séance ${sessionNum} reste à valider (moment A), `
+                    + 'hors ligne, avant la séance suivante.'}
               </div>
             </>
           )}

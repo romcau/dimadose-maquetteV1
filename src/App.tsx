@@ -547,7 +547,8 @@ function PatientView({
                   finalisee={workflowDone}
                   prochaineSeance={prochaineSeance}
                   onChangerProchaineSeance={changerProchaineSeance}
-                  onFinaliser={() => { terminerSeance(); setActiveModal('moment-D') }}
+                  onFinaliser={terminerSeance}
+                  onConsulterRapport={() => setActiveModal('moment-D')}
                   onCloturer={onBackToDashboard}
                   peutSaisir={droits.peutValiderEtape}
                 />
