@@ -1,6 +1,6 @@
 import { type PatientRecord } from './Dashboard'
 import { useDossier } from '../store'
-import { etatsMoments, imc, lireIMC, type MomentId } from '../logic'
+import { imc, lireIMC } from '../logic'
 import { MACHINES } from '../data'
 import { versionCourte, versionDetaillee } from '../version'
 
@@ -12,8 +12,6 @@ interface Props {
   onChange: (p: Page) => void
   validatedSteps: Set<Page>
   onOpenDicom?: () => void
-  /** Ouvre l'un des quatre moments de l'aide à la décision. */
-  onOpenMoment?: (id: MomentId) => void
 }
 
 const workflowSteps: { id: Page; num: string; label: string; sub: string; gating?: boolean }[] = [
@@ -30,7 +28,6 @@ export default function Sidebar({
   onChange,
   validatedSteps = new Set(),
   onOpenDicom,
-  onOpenMoment,
 }: Props) {
   const currentIdx  = workflowSteps.findIndex(s => s.id === current)
   const d = useDossier()
@@ -42,8 +39,6 @@ export default function Sidebar({
   // Le numéro de séance vient du dossier ouvert, pas de la fiche patient : les
   // deux restent ainsi d'accord quand on enchaîne sur la séance suivante.
   const seance = d.seanceCourante
-
-  const moments = etatsMoments(d.seances, d.recommandation, seance, p.totalSeances)
 
   const identite = d.identite(p)
 
@@ -197,47 +192,6 @@ export default function Sidebar({
               </button>
             )
           })}
-        </div>
-      </div>
-
-      {/* ── Les quatre moments ──
-          §3 du brief : quatre instants distincts, pas des onglets. On les situe
-          dans le temps et on dit ce qui s'y joue, pour ne pas tomber dessus par
-          hasard depuis une étape du workflow. */}
-      <div className="px-3 pb-2">
-        <div className="px-2 py-1.5 text-xs font-semibold text-white/30 uppercase tracking-wider mb-1">
-          Aide à la décision
-        </div>
-        <div className="flex flex-col gap-1">
-          {moments.map(m => (
-            <button
-              key={m.id}
-              onClick={() => onOpenMoment?.(m.id)}
-              title={`${m.quand} — ${m.etat}`}
-              className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-white/8 group"
-            >
-              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 transition-colors ${
-                m.niveau === 'warn'
-                  ? 'bg-warn text-white'
-                  : m.niveau === 'ok'
-                    ? 'bg-clinical/25 text-clinical'
-                    : 'bg-white/8 text-white/35'
-              }`}>
-                {m.tag}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-white/75 group-hover:text-white truncate">
-                  {m.label}
-                </div>
-                <div className="text-white/30 truncate" style={{ fontSize: '10px' }}>{m.quand}</div>
-                <div className={`truncate mt-0.5 ${
-                  m.niveau === 'warn' ? 'text-warn' : 'text-white/25'
-                }`} style={{ fontSize: '10px' }}>
-                  {m.etat}
-                </div>
-              </div>
-            </button>
-          ))}
         </div>
       </div>
 

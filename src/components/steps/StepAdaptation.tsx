@@ -14,7 +14,6 @@ import { useDossier } from '../../store'
 
 interface Props {
   canUpload: boolean
-  onGoToConstraints: () => void
   onGoToReport: () => void
 }
 
@@ -40,7 +39,7 @@ const optionalFiles: DicomEntry[] = [
   { id: 'IRMv', nom: 'IRMv', description: "IRM de vérification après adaptation (optionnel) — non conservée par la machine", status: 'optionnel', uploadable: true },
 ]
 
-export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToReport }: Props) {
+export default function StepAdaptation({ canUpload, onGoToReport }: Props) {
   const d = useDossier()
   const n = d.seanceCourante
   const seance = d.seance(n)

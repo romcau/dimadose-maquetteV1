@@ -167,6 +167,14 @@ function PatientView({
    * on circule librement.
    */
   const [decisionVue, setDecisionVue] = useState(false)
+
+  /**
+   * Fenêtre de qualification, ouverte par « Finaliser la séance ».
+   *
+   * La séance n'entre au dossier qu'une fois qualifiée : c'est le seul moment
+   * où l'on demande à l'équipe de dire, d'un mot, comment ça s'est passé.
+   */
+  const [qualificationOuverte, setQualificationOuverte] = useState(false)
   const [dicomOpen, setDicomOpen] = useState(false)
   const [workflowDone, setWorkflowDone] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -441,7 +449,6 @@ function PatientView({
           onChange={allerA}
           validatedSteps={validatedSteps}
           onOpenDicom={() => setDicomOpen(true)}
-          onOpenMoment={setActiveModal}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -503,7 +510,6 @@ function PatientView({
               <>
                 <StepAdaptation
                   canUpload={droits.peutCharger}
-                  onGoToConstraints={() => setActiveModal('moment-C')}
                   onGoToReport={() => setActiveModal('moment-D')}
                 />
                 <StepValidateBar
@@ -547,17 +553,11 @@ function PatientView({
                   finalisee={workflowDone}
                   prochaineSeance={prochaineSeance}
                   onChangerProchaineSeance={changerProchaineSeance}
-                  onFinaliser={terminerSeance}
+                  onFinaliser={() => setQualificationOuverte(true)}
                   onConsulterRapport={() => setActiveModal('moment-D')}
                   onCloturer={onBackToDashboard}
                   peutSaisir={droits.peutValiderEtape}
                 />
-
-                {/* La qualification ferme la séance : elle n'a de sens qu'une
-                    fois la séance finalisée. */}
-                {workflowDone && (
-                  <QualifierSeance seance={sessionNum} peutQualifier={droits.peutValiderEtape} />
-                )}
 
                 {/* Pas de barre de validation : la séance est délivrée, il n'y a
                     plus rien à vérifier avant la suite. Seulement le retour. */}
@@ -633,6 +633,16 @@ function PatientView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Qualification de la séance — passage obligé de la finalisation ── */}
+      {qualificationOuverte && (
+        <QualifierSeance
+          seance={sessionNum}
+          peutQualifier={droits.peutValiderEtape}
+          onEnregistre={() => { setQualificationOuverte(false); terminerSeance() }}
+          onFermer={() => setQualificationOuverte(false)}
+        />
       )}
 
       {/* ── Décision clinique ATP / ATS — passage obligé vers l'adaptation ── */}
