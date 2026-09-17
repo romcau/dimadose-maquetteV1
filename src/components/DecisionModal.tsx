@@ -29,6 +29,8 @@ const direction = (axe: string, valeur: number) => {
 interface Props {
   seance: number
   reco: Recommandation
+  /** Voie déjà retenue pour cette séance, s'il y en a une. */
+  decisionEnregistree?: Voie | null
   /** Seul le radiothérapeute tranche (§2 du brief). */
   peutDecider: boolean
   onChoisir: (v: Voie) => void
@@ -37,7 +39,7 @@ interface Props {
 }
 
 export default function DecisionModal({
-  seance, reco, peutDecider, onChoisir, onVoirAnalyse, onFermer,
+  seance, reco, decisionEnregistree, peutDecider, onChoisir, onVoirAnalyse, onFermer,
 }: Props) {
   // Les arguments qui pèsent le plus se lisent en premier.
   const justifications = [...reco.justifications].sort((a, b) => b.poids - a.poids)
@@ -63,6 +65,12 @@ export default function DecisionModal({
               score {fmt(reco.score, 1)} / seuil {fmt(reco.seuil, 1)} · confiance {reco.confiance}
             </span>
           </div>
+          {decisionEnregistree && (
+            <div className="mt-2 text-xs opacity-70">
+              Une décision est déjà enregistrée pour cette séance :{' '}
+              <strong className="opacity-100">{decisionEnregistree}</strong>. La confirmer ou la changer.
+            </div>
+          )}
         </div>
 
         <div className="p-6 flex flex-col gap-5 overflow-y-auto">
@@ -159,6 +167,11 @@ export default function DecisionModal({
                     <div className={`text-base font-bold ${v === reco.voie ? 'text-clinical group-hover:text-white' : 'text-slate-700'}`}>
                       {v}
                       {v === reco.voie && <span className="text-xs font-normal ml-1.5">proposé</span>}
+                      {v === decisionEnregistree && (
+                        <span className={`text-xs font-normal ml-1.5 ${v === reco.voie ? '' : 'text-clinical'}`}>
+                          retenu
+                        </span>
+                      )}
                     </div>
                     <div className={`text-xs mt-0.5 leading-tight ${v === reco.voie ? 'text-clinical/70 group-hover:text-white/80' : 'text-slate-400'}`}>
                       {v === 'ATP'

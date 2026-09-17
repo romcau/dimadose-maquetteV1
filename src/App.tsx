@@ -154,6 +154,16 @@ function PatientView({
   const [validatedSteps, setValidatedSteps] = useState<Set<Page>>(new Set())
   const [activeModal, setActiveModal] = useState<MomentId | null>(null)
   const [decisionModalOpen, setDecisionModalOpen] = useState(false)
+  /**
+   * La décision a été vue pour la séance en cours.
+   *
+   * Sans cela, un dossier dont la voie est déjà enregistrée — c'est le cas de
+   * toutes les séances du scénario de démonstration — passait à l'adaptation
+   * sans que rien ne soit demandé. La décision est le pivot du flux : on y
+   * passe une fois par séance, quitte à confirmer ce qui est déjà là. Ensuite
+   * on circule librement.
+   */
+  const [decisionVue, setDecisionVue] = useState(false)
   const [dicomOpen, setDicomOpen] = useState(false)
   const [workflowDone, setWorkflowDone] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -170,6 +180,7 @@ function PatientView({
   // Séance suivante : le planning initial reste acquis, on reprend à l'IRM du jour.
   const startNextSession = () => {
     d.setSeanceCourante(sessionNum + 1)
+    setDecisionVue(false)
     setValidatedSteps(new Set(['step-1']))
     setWorkflowDone(false)
     setActiveModal(null)
@@ -239,22 +250,27 @@ function PatientView({
    * l'évitaient.
    */
   const allerA = (cible: Page) => {
-    if (cible === 'step-3' && !decision) { setDecisionModalOpen(true); return }
+    if (cible === 'step-3' && !decisionVue) { setDecisionModalOpen(true); return }
     setPage(cible)
   }
 
   // Le bouton de bas d'étape valide l'IRM du jour au passage.
   const goToAdaptation = () => {
-    if (!decision) { setDecisionModalOpen(true); return }
+    if (!decisionVue) { setDecisionModalOpen(true); return }
     validate('step-2'); setPage('step-3')
   }
 
   const confirmDecision = (v: Voie) => {
-    d.enregistrerVoie(
-      sessionNum,
-      v,
-      v === reco.voie ? undefined : ['Décision prise depuis le workflow, hors écran de recommandation'],
-    )
+    // Reconfirmer à l'identique n'est pas une nouvelle décision : ne pas
+    // encombrer le journal d'une ligne qui ne change rien.
+    if (v !== decision) {
+      d.enregistrerVoie(
+        sessionNum,
+        v,
+        v === reco.voie ? undefined : ['Décision prise depuis le workflow, hors écran de recommandation'],
+      )
+    }
+    setDecisionVue(true)
     setDecisionModalOpen(false)
     validate('step-2')
     setPage('step-3')
@@ -584,6 +600,7 @@ function PatientView({
         <DecisionModal
           seance={sessionNum}
           reco={reco}
+          decisionEnregistree={decision}
           peutDecider={droits.peutDeciderVoie}
           onChoisir={confirmDecision}
           onVoirAnalyse={() => { setDecisionModalOpen(false); setActiveModal('moment-B') }}

@@ -5,9 +5,6 @@
  * ni le critère d'asservissement, ni les décalages temps réel. Ce qui s'y
  * passe n'a donc aucune trace automatique — ce que l'équipe rapporte ici est
  * la seule qui existe.
- *
- * L'écran distingue franchement les deux : ce qui est prescrit et connu, et ce
- * qui reste une piste tant que les formats propriétaires ne sont pas ouverts.
  * ──────────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useState } from 'react'
@@ -249,36 +246,6 @@ export default function StepGating({ sessionNum, peutSaisir }: Props) {
         </div>
       </div>
 
-      {/* ── Ce qui n'existe pas encore ── */}
-      <div className="bg-white rounded-3xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <div className="text-sm font-bold text-slate-800">Suivi intra-séance — piste</div>
-          <div className="text-xs text-slate-400 mt-0.5">
-            Ce que le jumeau numérique pourrait faire, et ce qu'il faudrait pour cela
-          </div>
-        </div>
-        <div className="p-5 flex flex-col gap-3 text-xs text-slate-600 leading-relaxed">
-          <p>
-            Le jumeau numérique suit aujourd'hui l'anatomie <strong className="text-slate-700">d'une
-            séance à l'autre</strong>. Il pourrait suivre le mouvement <strong className="text-slate-700">
-            pendant</strong> la séance, et rendre la dose reconstruite sensible à ce qui s'est
-            réellement passé sous le faisceau.
-          </p>
-          <p>
-            Il y faudrait ce que la machine ne transmet pas : les données d'asservissement, en
-            format propriétaire, et l'imagerie ciné 2D. Tant qu'elles restent fermées, cet écran
-            recueille le compte rendu de l'équipe, et rien d'autre ne subsiste de la séance.
-          </p>
-          <div className="bg-slate-50 rounded-2xl px-4 py-3 font-mono text-slate-500">
-            gating propriétaire + IRM ciné → suivi intra-séance → dose reconstruite sensible au
-            mouvement réel
-          </div>
-          <p className="text-slate-400">
-            La dose affichée reste une <strong className="text-slate-500">dose reconstruite</strong>,
-            jamais une dose délivrée. <span className="text-gating">[piste — non arrêtée]</span>
-          </p>
-        </div>
-      </div>
     </div>
   )
 }
