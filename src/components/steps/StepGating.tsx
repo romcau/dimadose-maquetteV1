@@ -38,41 +38,6 @@ export default function StepGating({ sessionNum }: Props) {
           </div>
         </div>
       </div>
-
-      {/* Situer la suite : le moment A n'appartient pas au workflow en séance */}
-      <div className="bg-white rounded-3xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <div className="text-sm font-bold text-slate-800">Et après la séance ?</div>
-          <div className="text-xs text-slate-400 mt-0.5">
-            Ce qui suit ne se passe pas dans la salle, mais entre deux séances
-          </div>
-        </div>
-        <div className="p-5 flex flex-col gap-3 text-xs text-slate-600 leading-relaxed">
-          <p>
-            Les quatre étapes ci-dessus sont le <strong className="text-slate-700">workflow en
-            séance</strong> : le patient est installé, l'équipe travaille dans Monaco et sur la
-            console. Une fois la séance délivrée, les données partent vers DIMADOSE par export
-            DICOM — donc <strong className="text-slate-700">après</strong> la séance.
-          </p>
-          <p>
-            C'est seulement à ce moment-là qu'un traitement automatique évalue la séance et met à
-            jour la dose cumulée. Les courbes et les verdicts que vous avez vus en ouvrant
-            « Récap de la séance » appartiennent à la <strong className="text-slate-700">validation
-            inter-séance</strong> (moment A) : elle se fait hors ligne, sans contrainte de temps,
-            et c'est le physicien qui la valide avant la séance suivante.
-          </p>
-          <div className="bg-slate-50 rounded-2xl px-4 py-3 font-mono text-slate-500">
-            séance N délivrée → export DICOM → <span className="text-clinical">moment A</span> —
-            évaluation et cumul → séance N+1 → <span className="text-clinical">moment B</span> —
-            recommandation ATP / ATS
-          </div>
-          <p className="text-slate-400">
-            Les quatre moments sont accessibles à tout instant depuis le bandeau
-            « Aide à la décision » de la barre latérale, qui indique pour chacun quand il intervient
-            et ce qu'il reste à y faire.
-          </p>
-        </div>
-      </div>
     </div>
   )
 }

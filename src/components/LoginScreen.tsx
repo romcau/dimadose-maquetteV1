@@ -124,7 +124,6 @@ export default function LoginScreen({ comptes, onCreerCompte, onLogin }: Props) 
         {/* Brand block */}
         <div className="flex flex-col items-center mb-8 gap-1">
           <DimadoseLogo width={320} />
-          <p className="text-slate-500 text-sm">Radiothérapie adaptative IRM-Linac</p>
         </div>
 
         <div className="bg-white rounded-3xl p-7 border border-violet-100">
