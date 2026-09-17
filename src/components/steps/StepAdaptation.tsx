@@ -1,6 +1,13 @@
 import { DataUploadZone, type DicomEntry } from '../DataUploadZone'
 import { dossier, formatNombre } from '../../data'
-import { fmt, fmtPct, fmtSigne, labelDirection } from '../../logic'
+import {
+  comparerAuPlanReference,
+  fmt,
+  fmtPct,
+  fmtSigne,
+  labelDirection,
+  SEUIL_ECART_PLAN_PCT,
+} from '../../logic'
 import { useDossier } from '../../store'
 
 interface Props {
@@ -15,6 +22,18 @@ const atsFiles: DicomEntry[] = [
   { id: 'RTDosej', nom: 'RTDosej', description: 'Dose du jour calculée — candidate au cumul',      status: 'manquant', uploadable: true },
 ]
 
+/**
+ * Une séance ATP applique le plan de référence, et n'a donc en principe rien à
+ * réimporter. Mais le plan peut avoir été retouché en séance, et une IRM de
+ * vérification acquise : ces objets restent facultatifs, et changent la nature
+ * de la séance quand ils reviennent.
+ */
+const atpFilesRef: DicomEntry[] = [
+  { id: 'rtplan', nom: 'RTPj modifié',   description: "Plan réellement délivré, s'il diffère du plan de référence", status: 'optionnel', uploadable: true },
+  { id: 'rtdose', nom: 'RTDosej modifié', description: 'Dose recalculée sur le plan délivré — candidate au cumul',     status: 'optionnel', uploadable: true },
+  { id: 'irmv',   nom: 'IRMv',            description: 'IRM de vérification après adaptation — non conservée par la machine', status: 'optionnel', uploadable: true },
+]
+
 const optionalFiles: DicomEntry[] = [
   { id: 'IRMv', nom: 'IRMv', description: "IRM de vérification après adaptation (optionnel) — non conservée par la machine", status: 'optionnel', uploadable: true },
 ]
@@ -25,6 +44,19 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
   const seance = d.seance(n)
   const decision = seance.voie
   const reco = d.recommandation
+
+  // Données facultatives rechargées après l'ATP
+  const optionnel = d.decisions[n]?.atpOptionnel ?? {}
+  const doseRechargee = optionnel.rtdose === true
+  const atpFiles: DicomEntry[] = atpFilesRef.map(f => ({
+    ...f,
+    status: optionnel[f.id as 'rtplan' | 'rtdose' | 'irmv'] ? 'charge' : 'optionnel',
+  }))
+
+  // Écart du plan délivré au plan de référence — n'a de sens qu'une fois la
+  // dose du plan délivré rechargée.
+  const ecartsPlan = doseRechargee ? comparerAuPlanReference(seance.points) : []
+  const ecartsNotables = ecartsPlan.filter(l => l.notable)
 
   // Contraintes effectivement retenues pour la séance (proposition ou saisie manuelle)
   const contraintes = d.propositions.filter(p => p.structure.type === 'oar')
@@ -111,12 +143,90 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
                 </div>
               </div>
             </div>
-            <div className="text-xs text-slate-500 bg-slate-50 rounded-2xl px-4 py-2.5">
-              Une séance ATP ne produit ni RTSSj, ni RTPj, ni RTDosej : rien à réimporter. La dose de
-              la séance sera estimée en appliquant le plan de référence sur le recalage rigide, d'où
-              une confiance dégradée et un état « séance à information réduite » dans la frise.
-              <span className="text-clinical"> [récupérabilité des décalages de table — point non arrêté]</span>
+            {/* Ce que l'ATP produit dépend de ce qui est revenu de la machine. */}
+            {doseRechargee ? (
+              <div className="text-xs text-ok-text bg-ok-bg border border-ok-border rounded-2xl px-4 py-2.5">
+                La dose du plan délivré a été rechargée : la dose de cette séance n'est plus une
+                estimation, et la séance sort de l'état « information réduite ».
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-2xl px-4 py-2.5">
+                Sans rechargement, la dose de la séance est estimée en appliquant le plan de
+                référence sur le recalage rigide, d'où une confiance dégradée et un état
+                « séance à information réduite » dans la frise.
+                <span className="text-clinical"> [récupérabilité des décalages de table — point non arrêté]</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Données facultatives d'une séance ATP ── */}
+      {decision === 'ATP' && (
+        <DataUploadZone
+          title="Données facultatives — si le plan a été retouché ou vérifié"
+          entries={atpFiles}
+          accentColor="blue"
+          readOnly={!canUpload}
+          onUpload={id => d.chargerOptionnelATP(n, id as 'rtplan' | 'rtdose' | 'irmv', true)}
+        />
+      )}
+
+      {/* ── Écart du plan délivré au plan de référence ── */}
+      {decision === 'ATP' && doseRechargee && (
+        <div className="bg-white rounded-3xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-sm font-bold text-slate-800">Plan délivré contre plan de référence</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Ce que change la retouche du plan, structure par structure, pour cette séance
+              </div>
             </div>
+            <span className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap ${
+              ecartsNotables.length === 0
+                ? 'bg-ok-bg text-ok-text border-ok-border'
+                : 'bg-warn-bg text-warn-text border-warn-border'
+            }`}>
+              {ecartsNotables.length === 0
+                ? `Aucun écart au-delà de ${SEUIL_ECART_PLAN_PCT} %`
+                : `${ecartsNotables.length} écart(s) au-delà de ${SEUIL_ECART_PLAN_PCT} %`}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  <th className="text-left font-semibold px-5 py-2.5">Structure</th>
+                  <th className="text-right font-semibold px-5 py-2.5">Plan de référence</th>
+                  <th className="text-right font-semibold px-5 py-2.5">Plan délivré</th>
+                  <th className="text-right font-semibold px-5 py-2.5">Écart</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ecartsPlan.map(l => (
+                  <tr key={l.structure.id} className="border-b border-slate-50 last:border-0">
+                    <td className="px-5 py-2.5 text-slate-700 whitespace-nowrap">
+                      {l.structure.nom} <span className="text-slate-400">{l.structure.metrique}</span>
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-mono text-xs text-slate-400 whitespace-nowrap">
+                      {fmt(l.reference, 2)} {l.structure.unite}
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-mono text-xs text-slate-700 whitespace-nowrap">
+                      {fmt(l.delivre, 2)} {l.structure.unite}
+                    </td>
+                    <td className={`px-5 py-2.5 text-right font-mono text-xs whitespace-nowrap ${
+                      l.notable ? 'text-warn-text font-semibold' : 'text-slate-400'
+                    }`}>
+                      {fmtSigne(l.ecart, 2)} ({fmtPct(l.ecartPct)})
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-3 border-t border-slate-100 text-xs text-slate-400 leading-relaxed">
+            Le plan de référence n'a pas été appliqué tel quel : le cumul retient la dose du plan
+            délivré, pas celle qu'aurait donnée le plan de référence.
           </div>
         </div>
       )}

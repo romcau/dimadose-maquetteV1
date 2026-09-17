@@ -70,6 +70,25 @@ export interface DecisionsSeance {
    */
   noteRecalage?: string
   noteDensites?: string
+  /**
+   * Données facultatives rechargées après une séance ATP.
+   *
+   * Une séance ATP applique le plan de référence, et n'a donc en principe rien
+   * à réimporter. Mais le plan peut avoir été retouché en séance, et une IRM
+   * de vérification peut avoir été acquise. Quand ces objets reviennent, la
+   * dose de la séance cesse d'être une estimation — c'est ce qui fait sortir
+   * la séance de l'état « information réduite ».
+   */
+  /** Ce que l'équipe rapporte de la délivrance — voir `SuiviGating`. */
+  gating?: SuiviGating
+  atpOptionnel?: {
+    /** Plan effectivement délivré, s'il diffère du plan de référence. */
+    rtplan?: boolean
+    /** Dose recalculée sur le plan délivré — candidate au cumul. */
+    rtdose?: boolean
+    /** IRM de vérification post-adaptation. */
+    irmv?: boolean
+  }
 }
 
 export type Decisions = Record<number, DecisionsSeance>
@@ -159,6 +178,103 @@ export function droits(role: Role): Droits {
     voitIdentitePatient: interne,
     peutGererPatients: interne && !lectureSeule,
   }
+}
+
+// ─── Gating et délivrance ────────────────────────────────────────────────────
+
+/**
+ * Comment la délivrance s'est passée, du point de vue de l'asservissement.
+ *
+ * Ce n'est pas une mesure : la machine n'exporte ni l'imagerie ciné 2D, ni le
+ * critère de gating, ni les décalages temps réel (§ du brief). C'est donc
+ * l'équipe qui le dit, et c'est la seule trace qu'il en reste.
+ */
+export type DeroulementGating = 'ras' | 'ajustements' | 'gros-ajustements'
+
+export const libellesDeroulementGating: Record<DeroulementGating, string> = {
+  'ras': 'RAS — rien de notable',
+  'ajustements': "Besoin d'ajuster",
+  'gros-ajustements': 'Gros ajustements',
+}
+
+export const explicationsDeroulementGating: Record<DeroulementGating, string> = {
+  'ras': "L'asservissement a tenu, aucune reprise",
+  'ajustements': 'Quelques reprises, sans remettre la séance en cause',
+  'gros-ajustements': 'Reprises nombreuses ou prolongées — à signaler au cumul',
+}
+
+export const niveauDeroulementGating: Record<DeroulementGating, Niveau> = {
+  'ras': 'ok',
+  'ajustements': 'warn',
+  'gros-ajustements': 'danger',
+}
+
+export interface SuiviGating {
+  deroulement: DeroulementGating
+  /** Ce qui s'est passé. Exigé dès qu'on sort du RAS. */
+  commentaire: string
+  /** Durée de la séance en minutes, de l'installation à la fin de délivrance. */
+  dureeMinutes: number | null
+  /** Le seuil de gating a été adapté pour cette séance. */
+  seuilAdapte: boolean
+  /** Le seuil réellement appliqué, quand il diffère du seuil du protocole. */
+  seuilApplique: string | null
+  par: string
+  horodatage: string
+}
+
+/**
+ * Comme pour la qualification de séance : un signalement sans explication ne
+ * transmet rien à qui lira le dossier plus tard.
+ */
+export function suiviGatingIncomplet(
+  deroulement: DeroulementGating,
+  commentaire: string,
+): string | null {
+  if (deroulement === 'ras') return null
+  return commentaire.trim().length === 0
+    ? "Dites ce qui a demandé un ajustement : sans cela, le signalement ne transmet rien."
+    : null
+}
+
+// ─── Plan délivré comparé au plan de référence ───────────────────────────────
+
+export interface LigneEcartPlan {
+  structure: Structure
+  /** Ce que prévoyait le plan de référence pour une séance. */
+  reference: number
+  /** Ce que donne la dose rechargée du plan réellement délivré. */
+  delivre: number
+  ecart: number
+  ecartPct: number
+  /** L'écart dépasse le seuil au-delà duquel il mérite un regard. */
+  notable: boolean
+}
+
+/** Au-delà de 5 %, l'écart au plan de référence mérite d'être regardé. */
+export const SEUIL_ECART_PLAN_PCT = 5
+
+/**
+ * Écart entre le plan délivré et le plan de référence, structure par structure.
+ *
+ * Utile après une séance ATP dont le plan a été retouché : le plan de référence
+ * n'a alors pas été appliqué tel quel, et le cumul ne doit pas faire comme si.
+ */
+export function comparerAuPlanReference(pointsDelivres: Record<string, number>): LigneEcartPlan[] {
+  return structures.map(structure => {
+    const reference = structure.prevuParSeance
+    const delivre = pointsDelivres[structure.id] ?? reference
+    const ecart = delivre - reference
+    const ecartPct = reference === 0 ? 0 : (ecart / reference) * 100
+    return {
+      structure,
+      reference,
+      delivre,
+      ecart,
+      ecartPct,
+      notable: Math.abs(ecartPct) >= SEUIL_ECART_PLAN_PCT,
+    }
+  })
 }
 
 // ─── Convention des axes du recalage ─────────────────────────────────────────

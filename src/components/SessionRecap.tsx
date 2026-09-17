@@ -16,7 +16,7 @@ const stepStyle: Record<StepState, { cls: string; icon: string; label: string }>
   pending: { cls: 'bg-slate-50 text-slate-300 border-slate-200',            icon: '○', label: 'À venir' },
 }
 
-const workflowSteps = ['Planning initial', 'IRM du jour', 'Adaptation', 'Gating']
+const workflowSteps = ['Planning initial', 'IRM du jour', 'Adaptation', 'Gating et délivrance']
 
 export default function SessionRecap({ patient: p, identite, onClose }: Props) {
   const loc = p.protocole

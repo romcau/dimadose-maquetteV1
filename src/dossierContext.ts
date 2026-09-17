@@ -19,6 +19,7 @@ import type {
   EntreeTrace,
   IdentiteAffichee,
   IdentiteDossier,
+  SuiviGating,
   ModeCumul,
   PropositionContrainte,
   Rapport,
@@ -99,6 +100,10 @@ export interface DossierContexte {
   validerSeance: (numero: number) => void
   /** Observations libres de la séance : recalage, affectation de densité. */
   noterSeance: (numero: number, champ: 'recalage' | 'densites', texte: string) => void
+  /** Données facultatives rechargées après une séance ATP. */
+  chargerOptionnelATP: (numero: number, objet: 'rtplan' | 'rtdose' | 'irmv', charge: boolean) => void
+  /** Ce que l'équipe rapporte de la délivrance : gating, seuil, durée. */
+  enregistrerGating: (numero: number, suivi: Omit<SuiviGating, 'par' | 'horodatage'>) => void
   /** Qualifie la séance en fin de workflow : code couleur et ce qui s'est passé. */
   qualifierSeance: (numero: number, code: CodeSeance, commentaire: string) => void
   devaliderSeance: (numero: number) => void

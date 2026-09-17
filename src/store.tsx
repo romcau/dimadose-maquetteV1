@@ -37,6 +37,8 @@ import {
   evaluerSeances,
   identiteAffichee,
   verdictIncomplet,
+  suiviGatingIncomplet,
+  libellesDeroulementGating,
   libellesCodeSeance,
   labelDeformation,
   labelModeCumul,
@@ -50,6 +52,7 @@ import {
   type EntreeTrace,
   type CodeSeance,
   type VerdictSeance,
+  type SuiviGating,
   type IdentiteDossier,
   type ModeCumul,
   type VerdictDeformation,
@@ -372,6 +375,60 @@ export function DossierProvider({
       })
     },
 
+    /**
+     * Données facultatives rechargées après une séance ATP.
+     *
+     * Le RTDose modifié change la nature de la séance : sa dose n'est plus
+     * estimée. Le journal doit donc en garder trace comme d'un acte, pas
+     * comme d'un réglage.
+     */
+    chargerOptionnelATP: (numero: number, objet: 'rtplan' | 'rtdose' | 'irmv', charge: boolean) => {
+      const libelles = {
+        rtplan: 'RTPj modifié',
+        rtdose: 'RTDosej modifié',
+        irmv: 'IRM de vérification',
+      } as const
+      patch(numero, {
+        atpOptionnel: { ...decisions[numero]?.atpOptionnel, [objet]: charge },
+      })
+      tracer({
+        categorie: 'dose',
+        seance: numero,
+        libelle: charge
+          ? `${libelles[objet]} chargé pour la séance ${numero} (ATP)`
+          : `${libelles[objet]} retiré de la séance ${numero}`,
+        detail: objet === 'rtdose' && charge
+          ? "La dose de la séance n'est plus estimée : elle vient du plan délivré."
+          : undefined,
+      })
+    },
+
+    /**
+     * Ce que l'équipe rapporte de la délivrance : déroulement de
+     * l'asservissement, seuil appliqué, durée. Rien de cela n'est exporté par
+     * la machine — c'est la seule trace qu'il en reste, donc elle part au
+     * journal.
+     */
+    enregistrerGating: (numero: number, suivi: Omit<SuiviGating, 'par' | 'horodatage'>) => {
+      if (suiviGatingIncomplet(suivi.deroulement, suivi.commentaire)) return
+      patch(numero, {
+        gating: { ...suivi, commentaire: suivi.commentaire.trim(), par: utilisateur.nom, horodatage: new Date().toISOString() },
+      })
+      const details = [
+        suivi.commentaire.trim(),
+        suivi.dureeMinutes !== null ? `Durée ${suivi.dureeMinutes} min` : null,
+        suivi.seuilAdapte ? `Seuil adapté : ${suivi.seuilApplique || 'non précisé'}` : null,
+      ].filter(Boolean).join(' · ')
+      tracer({
+        categorie: 'seance',
+        seance: numero,
+        libelle: `Délivrance séance ${numero} — ${libellesDeroulementGating[suivi.deroulement].toLowerCase()}`,
+        detail: details || undefined,
+        // Un ajustement du seuil ou de gros ajustements sortent du cours prévu.
+        ecart: suivi.deroulement !== 'ras' || suivi.seuilAdapte,
+      })
+    },
+
     devaliderSeance: (numero: number) => {
       patch(numero, { validee: false })
       tracer({
@@ -443,7 +500,7 @@ export function DossierProvider({
           + labelReferentiel(id),
       })
     },
-  }), [patch, tracer, seance, recommandation, seanceCourante, utilisateur.nom])
+  }), [patch, tracer, seance, recommandation, seanceCourante, utilisateur.nom, decisions])
 
   const editerContrainte = useCallback((structureId: string, valeurSaisie: number) => {
     setContraintesEditees(prev => ({

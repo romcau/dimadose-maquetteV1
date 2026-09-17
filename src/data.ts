@@ -28,7 +28,32 @@ export const libellesEtapes: Record<string, string> = {
   'step-1': 'Planning initial',
   'step-2': 'IRM du jour',
   'step-3': 'Adaptation',
-  'step-4': 'Gating',
+  'step-4': 'Gating et délivrance du traitement',
+}
+
+// ─── Gating : seuil du protocole ─────────────────────────────────────────────
+
+/**
+ * Critère d'asservissement du protocole.
+ *
+ * La machine n'exporte ni l'imagerie ciné 2D, ni le critère lui-même, ni les
+ * décalages temps réel : ce qui est écrit ici est le seuil **prescrit**, pas
+ * une mesure. Ce qui s'est réellement passé pendant la séance est rapporté par
+ * l'équipe.
+ */
+export interface SeuilGating {
+  /** Nom du critère tel que la console l'affiche. */
+  critere: string
+  /** Ce que le critère exige. */
+  regle: string
+  /** Structure suivie. */
+  structure: string
+}
+
+export const seuilGatingProtocole: SeuilGating = {
+  critere: 'VOICE',
+  regle: '99 % de la prostate dans le PTV',
+  structure: 'Prostate',
 }
 
 // ─── Machines de traitement ──────────────────────────────────────────────────

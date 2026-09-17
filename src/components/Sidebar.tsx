@@ -20,7 +20,7 @@ const workflowSteps: { id: Page; num: string; label: string; sub: string; gating
   { id: 'step-1', num: '1', label: 'Planning initial',  sub: 'Une seule fois · verrouillé'   },
   { id: 'step-2', num: '2', label: 'IRM du jour',       sub: 'Acquisition · Recalage' },
   { id: 'step-3', num: '3', label: 'Adaptation',        sub: 'ATP / ATS · Cumul dose'  },
-  { id: 'step-4', num: '4', label: 'Gating',            sub: 'Traitement asservi', gating: true },
+  { id: 'step-4', num: '4', label: 'Gating et délivrance', sub: 'Suivi intra-séance', gating: true },
 ]
 
 export default function Sidebar({

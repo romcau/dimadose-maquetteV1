@@ -441,7 +441,7 @@ function PatientView({
 
             {page === 'step-4' && (
               <>
-                <StepGating patient={p} sessionNum={sessionNum} />
+                <StepGating patient={p} sessionNum={sessionNum} peutSaisir={droits.peutValiderEtape} />
                 <StepValidateBar
                   validated={validatedSteps.has('step-4')}
                   onValidate={() => { validate('step-4'); terminerSeance() }}

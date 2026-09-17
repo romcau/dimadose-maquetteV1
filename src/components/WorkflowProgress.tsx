@@ -45,7 +45,7 @@ const steps: {
   },
   {
     id: 'step-4',
-    label: '4. Gating',
+    label: '4. Gating et délivrance',
     sub: 'Traitement asservi',
     headerColor: 'bg-gating',
     fillColor: 'bg-gating',
