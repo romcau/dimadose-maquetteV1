@@ -62,6 +62,10 @@ export interface DossierContexte {
   irmref: string
   /** Valeurs de contraintes éditées à la main, par séance puis par structure. */
   contraintesEditees: Record<number, Record<string, number>>
+  /** Tolérances éditées à la main, même forme. */
+  tolerancesEditees: Record<number, Record<string, number>>
+  /** Tolérance retenue pour une structure (protocole ou saisie). */
+  valeurTolerance: (structureId: string) => number
   /** Journal des actions humaines, en ajout seul, du plus récent au plus ancien. */
   trace: EntreeTrace[]
 
@@ -113,6 +117,7 @@ export interface DossierContexte {
   setCritere: (c: CritereComparaison) => void
   setIrmref: (id: string) => void
   editerContrainte: (structureId: string, valeur: number) => void
+  editerTolerance: (structureId: string, valeur: number) => void
   reinitialiserContrainte: (structureId: string) => void
   reinitialiserContraintes: () => void
 }

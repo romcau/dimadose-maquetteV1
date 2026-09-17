@@ -249,14 +249,23 @@ function PatientView({
    * bandeau du haut. Sans ce point de passage unique, deux routes sur trois
    * l'évitaient.
    */
+  /**
+   * La barrière ne vaut que pour qui peut trancher.
+   *
+   * Un physicien ou un manipulateur ne décide pas de la voie (§2 du brief) :
+   * la leur opposer les empêcherait d'ouvrir l'adaptation, y compris sur une
+   * séance déjà décidée. Ils y accèdent librement et lisent la décision prise.
+   */
+  const decisionRequise = droits.peutDeciderVoie && !decisionVue
+
   const allerA = (cible: Page) => {
-    if (cible === 'step-3' && !decisionVue) { setDecisionModalOpen(true); return }
+    if (cible === 'step-3' && decisionRequise) { setDecisionModalOpen(true); return }
     setPage(cible)
   }
 
   // Le bouton de bas d'étape valide l'IRM du jour au passage.
   const goToAdaptation = () => {
-    if (!decisionVue) { setDecisionModalOpen(true); return }
+    if (decisionRequise) { setDecisionModalOpen(true); return }
     validate('step-2'); setPage('step-3')
   }
 

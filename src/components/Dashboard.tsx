@@ -923,41 +923,6 @@ export default function Dashboard({
           ))}
         </div>
 
-        {/* ── Urgences ── */}
-        {urgents.length > 0 && (
-          <div className="bg-warn-bg border border-warn-border rounded-3xl p-4">
-            <div className="text-xs font-semibold text-warn-text uppercase tracking-wider mb-3 px-1">
-              Actions requises maintenant
-            </div>
-            <div className="flex flex-col gap-2">
-              {urgents.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => onSelectPatient(p)}
-                  className="flex items-center justify-between bg-white border border-warn-border rounded-2xl px-4 py-3 hover:bg-warn-bg/50 transition-colors text-left group"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="font-semibold text-slate-800 text-sm">{identiteAffichee(p, voitIdentite).libelle}</span>
-                    <span className="font-mono text-xs text-slate-400">{identiteAffichee(p, voitIdentite).identifiant}</span>
-                    <span className="text-xs text-slate-500">S{p.seanceCourante}/{p.totalSeances} · {p.protocole}</span>
-                    {alertesAffichees(p).slice(0, 1).map((a, i) => (
-                      <span key={i} className="text-xs text-danger-text bg-danger-bg border border-danger-border px-2 py-0.5 rounded-full">{a}</span>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${actionLabels[p.action].style}`}>
-                      {actionLabels[p.action].label}
-                    </span>
-                    <svg className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* ── Liste patients ── */}
         <div className="bg-white rounded-3xl overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">

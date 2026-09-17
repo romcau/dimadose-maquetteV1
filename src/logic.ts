@@ -180,6 +180,67 @@ export function droits(role: Role): Droits {
   }
 }
 
+// ─── Score d'une contrainte ──────────────────────────────────────────────────
+
+export interface ScoreContrainte {
+  /** 0 à 100. */
+  valeur: number
+  niveau: Niveau
+  libelle: string
+  /** Marge restante sur l'objectif de fin de traitement, dans l'unité de la structure. */
+  marge: number
+}
+
+/**
+ * Où en est une contrainte, sur une échelle de 0 à 100.
+ *
+ * **Ce n'est pas un indice clinique validé.** C'est une lecture : elle place
+ * la projection de fin de traitement par rapport à l'objectif, à l'échelle de
+ * la tolérance admise. Elle sert à parcourir un tableau d'un coup d'œil, pas à
+ * décider — la décision reste sur les valeurs elles-mêmes.
+ *
+ *   100 — la projection reste à une tolérance entière du plafond
+ *    50 — la projection est exactement sur l'objectif
+ *     0 — la projection dépasse l'objectif d'une tolérance entière
+ *
+ * Entre ces points, la variation est linéaire. La tolérance est donnée par
+ * séance ; elle est ramenée à l'échelle du traitement par `nbSeances`.
+ */
+export function scorerContrainte(
+  structure: Structure,
+  projection: number,
+  toleranceParSeance: number,
+  nbSeances: number,
+): ScoreContrainte {
+  const toleranceTotale = Math.max(toleranceParSeance * nbSeances, 1e-6)
+  // Marge positive = du bon côté de l'objectif, quel que soit le sens.
+  const marge = structure.sens === 'max'
+    ? structure.objectifTotal - projection
+    : projection - structure.objectifTotal
+
+  const brut = 50 + 50 * (marge / toleranceTotale)
+  const valeur = Math.round(Math.min(100, Math.max(0, brut)))
+
+  const niveau: Niveau = valeur >= 75 ? 'ok' : valeur >= 50 ? 'warn' : 'danger'
+  const libelle = valeur >= 75 ? 'Confortable' : valeur >= 50 ? 'Juste' : 'Dépassé'
+
+  return { valeur, niveau, libelle, marge }
+}
+
+/**
+ * Score d'ensemble, moyenne simple des contraintes affichées.
+ *
+ * Moyenne simple et non pondérée : pondérer supposerait une hiérarchie entre
+ * organes que la maquette n'a pas à décréter.
+ */
+export function scoreGlobal(scores: ScoreContrainte[]): ScoreContrainte | null {
+  if (scores.length === 0) return null
+  const valeur = Math.round(scores.reduce((a, s) => a + s.valeur, 0) / scores.length)
+  const niveau: Niveau = valeur >= 75 ? 'ok' : valeur >= 50 ? 'warn' : 'danger'
+  const libelle = valeur >= 75 ? 'Confortable' : valeur >= 50 ? 'Juste' : 'Dépassé'
+  return { valeur, niveau, libelle, marge: 0 }
+}
+
 // ─── Gating et délivrance ────────────────────────────────────────────────────
 
 /**

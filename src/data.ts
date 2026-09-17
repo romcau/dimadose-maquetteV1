@@ -182,6 +182,14 @@ export interface Structure {
    * C'est le « prévu au même stade » exigé par le brief (§10).
    */
   prevuParSeance: number
+  /**
+   * Tolérance admise sur la contrainte, par séance et dans son unité.
+   *
+   * C'est la marge à l'intérieur de laquelle un dépassement reste discutable
+   * plutôt que fautif. Elle vient du protocole, et reste ajustable séance par
+   * séance : c'est une convention d'équipe, pas une constante physique.
+   */
+  toleranceRef: number
 }
 
 // ─── Affectations de densité du RTSSp ────────────────────────────────────────
@@ -228,14 +236,14 @@ export const libellesOrigineDensite: Record<AffectationDensite['origine'], strin
 }
 
 export const structures: Structure[] = [
-  { id: 'ptv-d95',      nom: 'PTV',        type: 'cible', metrique: 'D95%',   sens: 'min', unite: 'Gy', contrainteRef: 6.88, objectifTotal: 34.40, prevuParSeance: 6.87 },
-  { id: 'prostate-d50', nom: 'Prostate',   type: 'cible', metrique: 'D50%',   sens: 'max', unite: 'Gy', contrainteRef: 7.25, objectifTotal: 36.25, prevuParSeance: 7.03 },
-  { id: 'rectum-d05',   nom: 'Rectum',     type: 'oar',   metrique: 'D0.5cc', sens: 'max', unite: 'Gy', contrainteRef: 7.60, objectifTotal: 38.00, prevuParSeance: 4.60 },
-  { id: 'rectum-v29',   nom: 'Rectum',     type: 'oar',   metrique: 'V29Gy',  sens: 'max', unite: 'cc', contrainteRef: 4.00, objectifTotal: 20.00, prevuParSeance: 3.27 },
-  { id: 'vessie-d05',   nom: 'Vessie',     type: 'oar',   metrique: 'D0.5cc', sens: 'max', unite: 'Gy', contrainteRef: 7.60, objectifTotal: 38.00, prevuParSeance: 4.73 },
-  { id: 'uretre-d10',   nom: 'Urètre',     type: 'oar',   metrique: 'D10%',   sens: 'max', unite: 'Gy', contrainteRef: 8.40, objectifTotal: 42.00, prevuParSeance: 5.07 },
-  { id: 'tf-g-d2',      nom: 'TF Gauche',  type: 'oar',   metrique: 'D2cc',   sens: 'max', unite: 'Gy', contrainteRef: 5.00, objectifTotal: 25.00, prevuParSeance: 2.37 },
-  { id: 'tf-d-d2',      nom: 'TF Droite',  type: 'oar',   metrique: 'D2cc',   sens: 'max', unite: 'Gy', contrainteRef: 5.00, objectifTotal: 25.00, prevuParSeance: 2.37 },
+  { id: 'ptv-d95',      nom: 'PTV',        type: 'cible', metrique: 'D95%',   sens: 'min', unite: 'Gy', contrainteRef: 6.88, objectifTotal: 34.40, prevuParSeance: 6.87, toleranceRef: 0.35 },
+  { id: 'prostate-d50', nom: 'Prostate',   type: 'cible', metrique: 'D50%',   sens: 'max', unite: 'Gy', contrainteRef: 7.25, objectifTotal: 36.25, prevuParSeance: 7.03, toleranceRef: 0.36 },
+  { id: 'rectum-d05',   nom: 'Rectum',     type: 'oar',   metrique: 'D0.5cc', sens: 'max', unite: 'Gy', contrainteRef: 7.60, objectifTotal: 38.00, prevuParSeance: 4.60, toleranceRef: 0.38 },
+  { id: 'rectum-v29',   nom: 'Rectum',     type: 'oar',   metrique: 'V29Gy',  sens: 'max', unite: 'cc', contrainteRef: 4.00, objectifTotal: 20.00, prevuParSeance: 3.27, toleranceRef: 0.40 },
+  { id: 'vessie-d05',   nom: 'Vessie',     type: 'oar',   metrique: 'D0.5cc', sens: 'max', unite: 'Gy', contrainteRef: 7.60, objectifTotal: 38.00, prevuParSeance: 4.73, toleranceRef: 0.38 },
+  { id: 'uretre-d10',   nom: 'Urètre',     type: 'oar',   metrique: 'D10%',   sens: 'max', unite: 'Gy', contrainteRef: 8.40, objectifTotal: 42.00, prevuParSeance: 5.07, toleranceRef: 0.42 },
+  { id: 'tf-g-d2',      nom: 'TF Gauche',  type: 'oar',   metrique: 'D2cc',   sens: 'max', unite: 'Gy', contrainteRef: 5.00, objectifTotal: 25.00, prevuParSeance: 2.37, toleranceRef: 0.25 },
+  { id: 'tf-d-d2',      nom: 'TF Droite',  type: 'oar',   metrique: 'D2cc',   sens: 'max', unite: 'Gy', contrainteRef: 5.00, objectifTotal: 25.00, prevuParSeance: 2.37, toleranceRef: 0.25 },
 ]
 
 /** Formatage décimal français — virgule décimale partout dans l'interface. */

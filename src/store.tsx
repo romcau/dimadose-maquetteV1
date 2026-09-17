@@ -134,6 +134,8 @@ export function DossierProvider({
   const [irmref, setIrmrefState] = useState(initial?.irmref ?? REFERENTIEL_PAR_DEFAUT)
   const [contraintesEditees, setContraintesEditees] =
     useState<Record<number, Record<string, number>>>(initial?.contraintesEditees ?? {})
+  const [tolerancesEditees, setTolerancesEditees] =
+    useState<Record<number, Record<string, number>>>(initial?.tolerancesEditees ?? {})
   const [trace, setTrace] = useState<EntreeTrace[]>(initial?.trace ?? [])
   const [enregistreLe, setEnregistreLe] = useState<string | null>(initial?.enregistreLe ?? null)
 
@@ -216,12 +218,13 @@ export function DossierProvider({
       seanceCourante,
       decisions,
       contraintesEditees,
+      tolerancesEditees,
       critere,
       irmref,
       trace,
     })
     if (horodatage) setEnregistreLe(horodatage)
-  }, [dossierId, seanceCourante, decisions, contraintesEditees, critere, irmref, trace])
+  }, [dossierId, seanceCourante, decisions, contraintesEditees, tolerancesEditees, critere, irmref, trace])
 
   const reinitialiser = useCallback(() => {
     effacer(dossierId)
@@ -520,6 +523,38 @@ export function DossierProvider({
     })
   }, [seanceCourante, propositions, tracer])
 
+  /**
+   * Tolérance admise sur une contrainte, pour la séance en cours.
+   *
+   * Elle vient du protocole et reste ajustable : c'est une convention
+   * d'équipe, pas une constante physique. La modifier change la lecture du
+   * score, jamais la dose — d'où un rang de simple réglage au journal.
+   */
+  const editerTolerance = useCallback((structureId: string, valeurSaisie: number) => {
+    setTolerancesEditees(prev => ({
+      ...prev,
+      [seanceCourante]: { ...prev[seanceCourante], [structureId]: valeurSaisie },
+    }))
+    const p = propositions.find(x => x.id === structureId)
+    if (!p) return
+    tracer({
+      categorie: 'contrainte',
+      seance: seanceCourante,
+      libelle: `Tolérance ${p.structure.nom} ${p.structure.metrique} fixée à `
+        + `${virgule(valeurSaisie)} ${p.structure.unite}`,
+      detail: `Tolérance du protocole : ${virgule(p.structure.toleranceRef)} ${p.structure.unite} par séance`,
+      ecart: Math.abs(valeurSaisie - p.structure.toleranceRef) > 1e-9,
+    })
+  }, [seanceCourante, propositions, tracer])
+
+  const valeurTolerance = useCallback(
+    (structureId: string) =>
+      tolerancesEditees[seanceCourante]?.[structureId]
+      ?? propositions.find(p => p.id === structureId)?.structure.toleranceRef
+      ?? 0,
+    [tolerancesEditees, seanceCourante, propositions],
+  )
+
   const reinitialiserContrainte = useCallback((structureId: string) => {
     setContraintesEditees(prev => {
       const pourSeance = { ...prev[seanceCourante] }
@@ -556,6 +591,8 @@ export function DossierProvider({
     critere,
     irmref,
     contraintesEditees,
+    tolerancesEditees,
+    valeurTolerance,
     trace,
 
     seances,
@@ -577,14 +614,15 @@ export function DossierProvider({
     tracer,
     ...actions,
     editerContrainte,
+    editerTolerance,
     reinitialiserContrainte,
     reinitialiserContraintes,
   }), [
     dossierId, utilisateur, droits, machine, identite, seanceCourante, decisions, critere, irmref,
-    contraintesEditees, trace, seances, seance, cumul, cumulJusqua, recommandation,
+    contraintesEditees, tolerancesEditees, valeurTolerance, trace, seances, seance, cumul, cumulJusqua, recommandation,
     propositions, valeurContrainte, contraintesModifiees, rapport, alertes,
     persistant, enregistreLe, reinitialiser, tracer, actions,
-    editerContrainte, reinitialiserContrainte, reinitialiserContraintes,
+    editerContrainte, editerTolerance, reinitialiserContrainte, reinitialiserContraintes,
   ])
 
   return <Contexte.Provider value={valeur}>{children}</Contexte.Provider>

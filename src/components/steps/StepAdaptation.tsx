@@ -3,6 +3,8 @@ import { dossier, formatNombre } from '../../data'
 import {
   comparerAuPlanReference,
   fmt,
+  scorerContrainte,
+  scoreGlobal,
   fmtPct,
   fmtSigne,
   labelDirection,
@@ -60,6 +62,13 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
 
   // Contraintes effectivement retenues pour la séance (proposition ou saisie manuelle)
   const contraintes = d.propositions.filter(p => p.structure.type === 'oar')
+
+  // Le score compare la projection de fin de traitement à l'objectif : il lui
+  // faut donc la durée du protocole, pas seulement la séance du jour.
+  const totalSeances = dossier.nbSeances
+  const scoreEnsemble = scoreGlobal(
+    contraintes.map(p => scorerContrainte(p.structure, p.cumul.projection, d.valeurTolerance(p.id), totalSeances)),
+  )
 
   // Cumul par structure, avec la part de l'objectif déjà consommée
   const cumulBarres = d.cumul.lignes.filter(l =>
@@ -252,18 +261,12 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
                   {d.contraintesModifiees && ' · valeurs ajustées à la main'}
                 </div>
               </div>
-              <button
-                onClick={onGoToConstraints}
-                className="text-xs text-clinical border border-clinical-border bg-clinical-light hover:bg-clinical hover:text-white px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0"
-              >
-                Détail et export →
-              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/70">
-                    {['OAR', 'Contrainte', 'Référence', 'Retenue', 'Ajustement', 'Cumul / Prévu'].map(h => (
+                    {['OAR', 'Contrainte', 'Référence', 'Retenue', 'Tolérance', 'Ajustement', 'Cumul / Prévu', 'Score'].map(h => (
                       <th key={h} className="text-left px-4 py-2.5 font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -275,7 +278,11 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
                     const s = p.structure
                     const dir = labelDirection[p.direction]
                     const valeur = d.valeurContrainte(p.id)
-                    const signe = s.sens === 'max' ? '≤' : '≥'
+                    const tolerance = d.valeurTolerance(p.id)
+                    const signe = s.sens === 'max' ? '\u2264' : '\u2265'
+                    const score = scorerContrainte(s, p.cumul.projection, tolerance, totalSeances)
+                    const contrainteModifiee = Math.abs(valeur - p.valeurProposee) > 1e-9
+                    const toleranceModifiee = Math.abs(tolerance - s.toleranceRef) > 1e-9
                     return (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                         <td className="px-4 py-3 font-semibold text-slate-700">{s.nom}</td>
@@ -283,9 +290,60 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
                         <td className="px-4 py-3 font-mono text-slate-400 whitespace-nowrap">
                           {signe} {fmt(p.valeurRef)} {s.unite}
                         </td>
-                        <td className="px-4 py-3 font-mono font-semibold text-slate-700 whitespace-nowrap">
-                          {signe} {fmt(valeur)} {s.unite}
+
+                        {/* Contrainte retenue \u2014 modifiable ici, sans quitter le workflow */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400 font-mono">{signe}</span>
+                            <input
+                              type="number"
+                              step="0.05"
+                              min="0"
+                              value={valeur}
+                              disabled={!canUpload}
+                              onChange={e => {
+                                const v = parseFloat(e.target.value)
+                                if (isFinite(v) && v >= 0) d.editerContrainte(p.id, v)
+                              }}
+                              className={`w-20 font-mono font-semibold rounded-lg border px-2 py-1
+                                focus:outline-none focus:border-clinical disabled:bg-slate-50 disabled:cursor-not-allowed
+                                ${contrainteModifiee ? 'border-clinical text-clinical bg-clinical-light' : 'border-slate-200 text-slate-700'}`}
+                            />
+                            <span className="text-slate-400">{s.unite}</span>
+                            {contrainteModifiee && (
+                              <button
+                                onClick={() => d.reinitialiserContrainte(p.id)}
+                                title="Revenir à la proposition DIMADOSE"
+                                className="text-slate-300 hover:text-clinical transition-colors px-1"
+                              >
+                                &#8634;
+                              </button>
+                            )}
+                          </div>
                         </td>
+
+                        {/* Tolérance admise \u2014 convention d'équipe, pas une constante */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400 font-mono">&#177;</span>
+                            <input
+                              type="number"
+                              step="0.05"
+                              min="0"
+                              value={tolerance}
+                              disabled={!canUpload}
+                              onChange={e => {
+                                const v = parseFloat(e.target.value)
+                                if (isFinite(v) && v >= 0) d.editerTolerance(p.id, v)
+                              }}
+                              className={`w-20 font-mono rounded-lg border px-2 py-1
+                                focus:outline-none focus:border-clinical disabled:bg-slate-50 disabled:cursor-not-allowed
+                                ${toleranceModifiee ? 'border-clinical text-clinical bg-clinical-light' : 'border-slate-200 text-slate-600'}`}
+                            />
+                            <span className="text-slate-400">{s.unite}</span>
+                          </div>
+                        </td>
+
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
                             dir.niveau === 'danger'
@@ -303,23 +361,78 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
                           </span>
                           <span className="text-slate-400"> / {formatNombre(p.cumul.prevu, 1)} {s.unite}</span>
                         </td>
+
+                        {/* Score : lecture de la projection contre l'objectif, a l'echelle
+                            de la tolerance. Le detail est en pied de tableau. */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div
+                            className="flex items-center gap-2 cursor-help"
+                            title={`Projection fin de traitement ${formatNombre(p.cumul.projection, 1)} ${s.unite} `
+                              + `pour un objectif de ${formatNombre(s.objectifTotal, 1)} ${s.unite} \u00b7 `
+                              + `marge ${fmtSigne(score.marge, 1)} ${s.unite}`}
+                          >
+                            <div className="w-12 h-1.5 rounded-full bg-slate-100 overflow-hidden shrink-0">
+                              <div
+                                className={`h-full rounded-full ${
+                                  score.niveau === 'ok' ? 'bg-ok' : score.niveau === 'warn' ? 'bg-warn' : 'bg-danger'
+                                }`}
+                                style={{ width: `${score.valeur}%` }}
+                              />
+                            </div>
+                            <span className={`font-mono font-semibold ${
+                              score.niveau === 'ok' ? 'text-ok-text' : score.niveau === 'warn' ? 'text-warn-text' : 'text-danger-text'
+                            }`}>
+                              {score.valeur}
+                            </span>
+                          </div>
+                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
+                {scoreEnsemble && (
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-100 bg-slate-50/70">
+                      <td colSpan={7} className="px-4 py-3 text-right font-semibold text-slate-500 uppercase tracking-wider">
+                        Score d&#39;ensemble
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`font-mono text-base font-bold ${
+                          scoreEnsemble.niveau === 'ok' ? 'text-ok-text' : scoreEnsemble.niveau === 'warn' ? 'text-warn-text' : 'text-danger-text'
+                        }`}>
+                          {scoreEnsemble.valeur}
+                        </span>
+                        <span className="text-slate-400"> / 100</span>
+                        <span className="text-slate-400 ml-2">{scoreEnsemble.libelle}</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
-            <div className="px-5 py-2.5 border-t border-slate-100 text-xs text-slate-400 italic">
-              Aucun échange automatique avec le TPS : ces valeurs sont recopiées à la main par le physicien.
+            <div className="px-5 py-3 border-t border-slate-100 text-xs text-slate-400 leading-relaxed">
+              <p>
+                Aucun échange automatique avec le TPS : ces valeurs sont recopiées à la main par le
+                physicien. Contraintes et tolérances se modifient ici ; chaque changement part au
+                journal avec sa valeur d'origine.
+              </p>
+              <p className="mt-1.5">
+                <strong className="text-slate-500">Le score n'est pas un indice clinique validé.</strong>{' '}
+                Il place la projection de fin de traitement par rapport à l'objectif, à l'échelle de
+                la tolérance : 100 quand la projection reste à une tolérance entière du plafond,
+                50 quand elle est exactement sur l'objectif, 0 quand elle le dépasse d'une tolérance
+                entière. Il sert à parcourir le tableau, pas à décider — la décision reste sur les
+                valeurs.
+              </p>
+              <p className="mt-1.5">
+                Il ne dit pas la même chose que la colonne <em>Cumul / Prévu</em>, et les deux
+                peuvent diverger : une structure peut dériver nettement par rapport au prévisionnel
+                tout en restant loin de son objectif de fin de traitement — elle aura alors un écart
+                signalé et un score confortable. L'écart dit la tendance, le score dit la marge.
+              </p>
             </div>
           </div>
 
-          <DataUploadZone
-            title="Données optionnelles"
-            entries={optionalFiles}
-            accentColor="blue"
-            readOnly={!canUpload}
-          />
         </>
       )}
 
@@ -383,6 +496,16 @@ export default function StepAdaptation({ canUpload, onGoToConstraints, onGoToRep
             une fois la séance 1 évaluée et validée.
           </div>
         )
+      )}
+
+      {/* ── Données optionnelles, après le cumul : elles ne conditionnent rien ── */}
+      {decision === 'ATS' && (
+        <DataUploadZone
+          title="Données optionnelles"
+          entries={optionalFiles}
+          accentColor="blue"
+          readOnly={!canUpload}
+        />
       )}
     </div>
   )
