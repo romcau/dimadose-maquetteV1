@@ -97,6 +97,8 @@ export interface DossierContexte {
   choisirModeCumul: (numero: number, m: ModeCumul) => void
   choisirDose: (numero: number, d: CandidateDose) => void
   validerSeance: (numero: number) => void
+  /** Observations libres de la séance : recalage, affectation de densité. */
+  noterSeance: (numero: number, champ: 'recalage' | 'densites', texte: string) => void
   /** Qualifie la séance en fin de workflow : code couleur et ce qui s'est passé. */
   qualifierSeance: (numero: number, code: CodeSeance, commentaire: string) => void
   devaliderSeance: (numero: number) => void

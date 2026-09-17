@@ -4,10 +4,27 @@ import {
   fmt,
   fmtSigne,
   labelReferentiel,
+  lireDecalages,
+  CONVENTION_AXES,
+  RAPPEL_CONVENTION_AXES,
   referentielsPossibles,
   type Voie,
 } from '../../logic'
 import { useDossier } from '../../store'
+import NoteSeance from './NoteSeance'
+
+/** Ce que parcourt l'axe, en une abréviation qui tient dans un pavé. */
+const sensAxe = (axe: string) =>
+  CONVENTION_AXES.find(c => c.axe === axe)
+    ? `${CONVENTION_AXES.find(c => c.axe === axe)!.negatifCourt}/${CONVENTION_AXES.find(c => c.axe === axe)!.positifCourt}`
+    : ''
+
+/** Direction correspondant au signe de la valeur. */
+const direction = (axe: string, valeur: number) => {
+  const c = CONVENTION_AXES.find(x => x.axe === axe)
+  if (!c || valeur === 0) return null
+  return valeur > 0 ? c.positif : c.negatif
+}
 
 interface Props {
   canDecide: boolean
@@ -196,7 +213,6 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
               num="2" tool={d.machine.tps} toolColor="bg-blue-100 text-blue-700"
               title="Recalage IRMj / IRMref (Reg)"
               detail={`Charger le recalage rigide produit dans le ${d.machine.tps}. Il porte les décalages Δx, Δy, Δz — et, en ATP, le décalage de table appliqué.`}
-              last
             >
               <div className="mt-2">
                 {irmjStatus !== 'done' ? (
@@ -223,13 +239,20 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
                             dec.inhabituel ? 'bg-warn-bg border-warn-border' : 'bg-clinical-light border-clinical-border'
                           }`}
                         >
-                          <div className="text-xs text-slate-500 font-medium mb-0.5">Δ{dec.axe}</div>
+                          <div className="text-xs text-slate-500 font-medium mb-0.5">
+                            Δ{dec.axe}
+                            <span className="text-slate-400 font-normal ml-1">{sensAxe(dec.axe)}</span>
+                          </div>
                           <div className={`text-lg font-bold font-mono leading-none ${
                             dec.inhabituel ? 'text-warn' : 'text-clinical'
                           }`}>
                             {fmtSigne(dec.valeur, 1)}
                           </div>
-                          <div className="text-xs text-slate-400 mt-0.5">mm</div>
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            mm {direction(dec.axe, dec.valeur) && (
+                              <span className="font-medium">· {direction(dec.axe, dec.valeur)}</span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -243,6 +266,28 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
                 )}
               </div>
             </WorkflowAction>
+
+            <WorkflowAction
+              num="3" tool="RTSSj" toolColor="bg-clinical-light text-clinical"
+              title="Contours et densités du jour"
+              detail="Ce que ni l'IRMj ni le recalage ne portent : comment le recalage s'est réellement passé, et quelle affectation de densité a été retenue pour cette séance."
+              last
+            >
+              <NoteSeance
+                seance={n}
+                champ="recalage"
+                label="Déroulement du recalage"
+                placeholder="Reprise manuelle, structure mal recalée, gaz rectal…"
+                modifiable={canUpload}
+              />
+              <NoteSeance
+                seance={n}
+                champ="densites"
+                label="Affectation de densité"
+                placeholder="Reprise du protocole, ou écart et sa raison…"
+                modifiable={canUpload}
+              />
+            </WorkflowAction>
           </div>
         </div>
 
@@ -253,7 +298,7 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
             <div className="bg-white rounded-3xl overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100">
                 <div className="text-sm font-bold text-slate-800">Historique S1–S{n - 1}</div>
-                <div className="text-xs text-slate-400 mt-0.5">Voie retenue, verdicts et confiance de chaque séance</div>
+                <div className="text-xs text-slate-400 mt-0.5">Voie retenue et décalages de recalage de chaque séance</div>
               </div>
               <div className="p-4 flex flex-col gap-1.5">
                 {historique.map(s => (
@@ -266,20 +311,32 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
                     }`}>
                       {s.voie}
                     </span>
-                    <span className="text-xs text-slate-400 font-mono flex-1">
-                      {s.mesures.decalages.map(v => fmtSigne(v, 1)).join(' · ')} mm
+                    {/* Un décalage sans son axe ni son sens ne se relit pas :
+                        +1,2 mm vers la gauche et vers la droite ne sont pas la
+                        même chose. */}
+                    <span className="flex-1 flex items-baseline gap-2.5 flex-wrap text-xs">
+                      {lireDecalages(s.mesures.decalages).map(dec => (
+                        <span key={dec.axe} className="whitespace-nowrap">
+                          <span className="text-slate-300 font-semibold">{dec.axe.toUpperCase()}</span>
+                          <span className="text-slate-500 font-mono ml-1">{fmtSigne(dec.valeur, 1)}</span>
+                          {dec.directionCourte && (
+                            <span className="text-slate-400 ml-1">{dec.directionCourte}</span>
+                          )}
+                        </span>
+                      ))}
+                      <span className="text-slate-300">mm</span>
                     </span>
                     {!s.incluse && (
                       <span className="text-xs text-slate-400 italic">exclue</span>
                     )}
-                    <span
-                      title={s.confiance.motifs.join(' · ')}
-                      className={`text-xs px-2 py-0.5 rounded-full cursor-help ${confianceStyle[s.confiance.niveau]}`}
-                    >
-                      {s.confiance.niveau}
-                    </span>
                   </div>
                 ))}
+              </div>
+              {/* La convention n'est pas universelle : la dire évite de lire un
+                  décalage à l'envers. */}
+              <div className="px-5 py-3 border-t border-slate-100 text-xs text-slate-400 leading-relaxed">
+                {RAPPEL_CONVENTION_AXES} — convention IEC 61217 telle que {d.machine.tps} l'emploie
+                (décubitus dorsal, tête en premier). <span className="text-slate-500">[à confirmer]</span>
               </div>
             </div>
           )}

@@ -62,6 +62,14 @@ export interface DecisionsSeance {
   reacquisition?: boolean
   /** Qualification de la séance en fin de workflow — voir `VerdictSeance`. */
   verdict?: VerdictSeance
+  /**
+   * Comment s'est passé le recalage du jour, et quelle affectation de densité
+   * a été retenue. Texte libre : ce sont des observations que rien ne calcule,
+   * et qui expliquent après coup pourquoi une séance ressemble à ce qu'elle
+   * est. Elles suivent au rapport et au journal.
+   */
+  noteRecalage?: string
+  noteDensites?: string
 }
 
 export type Decisions = Record<number, DecisionsSeance>
@@ -152,6 +160,60 @@ export function droits(role: Role): Droits {
     peutGererPatients: interne && !lectureSeule,
   }
 }
+
+// ─── Convention des axes du recalage ─────────────────────────────────────────
+
+export type Axe = 'x' | 'y' | 'z'
+
+/**
+ * Ce que désignent X, Y et Z, et dans quel sens.
+ *
+ * Convention IEC 61217 telle que Monaco l'emploie pour un patient en décubitus
+ * dorsal, tête en premier. **Elle n'est pas arrêtée** : à confirmer auprès de
+ * l'établissement, et elle peut différer sur MRIdian. Un décalage lu à
+ * l'envers déplacerait la table du mauvais côté — c'est pourquoi la maquette
+ * affiche la convention plutôt que de la sous-entendre.
+ */
+export interface ConventionAxe {
+  axe: Axe
+  /** Ce que l'axe parcourt. */
+  plan: string
+  /** Direction quand la valeur est positive, puis négative. */
+  positif: string
+  negatif: string
+  /** Formes courtes, pour les lignes serrées. */
+  positifCourt: string
+  negatifCourt: string
+}
+
+export const CONVENTION_AXES: ConventionAxe[] = [
+  { axe: 'x', plan: 'Latéral',      positif: 'gauche',    negatif: 'droite',     positifCourt: 'G',    negatifCourt: 'D' },
+  { axe: 'y', plan: 'Longitudinal', positif: 'supérieur', negatif: 'inférieur',  positifCourt: 'sup',  negatifCourt: 'inf' },
+  { axe: 'z', plan: 'Vertical',     positif: 'antérieur', negatif: 'postérieur', positifCourt: 'ant',  negatifCourt: 'post' },
+]
+
+export interface DecalageLu extends ConventionAxe {
+  valeur: number
+  /** Direction correspondant au signe. `null` quand la valeur est nulle. */
+  direction: string | null
+  directionCourte: string | null
+}
+
+export function lireDecalages(decalages: readonly [number, number, number]): DecalageLu[] {
+  return CONVENTION_AXES.map((c, i) => {
+    const valeur = decalages[i]
+    return {
+      ...c,
+      valeur,
+      direction: valeur === 0 ? null : valeur > 0 ? c.positif : c.negatif,
+      directionCourte: valeur === 0 ? null : valeur > 0 ? c.positifCourt : c.negatifCourt,
+    }
+  })
+}
+
+/** Phrase de rappel de la convention, affichée sous les décalages. */
+export const RAPPEL_CONVENTION_AXES =
+  CONVENTION_AXES.map(c => `${c.axe.toUpperCase()} ${c.negatif} ↔ ${c.positif}`).join(' · ')
 
 // ─── Densités affectées au RTSSp ─────────────────────────────────────────────
 
@@ -1564,6 +1626,7 @@ export function referentielsPossibles(
 
 export type CategorieTrace =
   | 'etape'
+  | 'note'
   | 'voie'
   | 'verdict'
   | 'sommation'
@@ -1605,6 +1668,7 @@ export interface EntreeTrace {
 
 export const labelCategorieTrace: Record<CategorieTrace, string> = {
   etape: "Validation d'étape",
+  note: 'Observation de séance',
   voie: 'Décision ATP / ATS',
   verdict: 'Révision de verdict',
   sommation: 'Mode de sommation',
@@ -1620,6 +1684,7 @@ export const labelCategorieTrace: Record<CategorieTrace, string> = {
 
 export const niveauCategorieTrace: Record<CategorieTrace, Niveau> = {
   etape: 'ok',
+  note: 'neutral',
   voie: 'warn',
   verdict: 'warn',
   sommation: 'warn',
@@ -1643,6 +1708,7 @@ export const rangCategorieTrace: Record<CategorieTrace, RangTrace> = {
   sommation: 'decision',
   reacquisition: 'decision',
   etape: 'verification',
+  note: 'verification',
   validation: 'verification',
   seance: 'verification',
   dose: 'verification',

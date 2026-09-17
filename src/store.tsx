@@ -350,6 +350,28 @@ export function DossierProvider({
       })
     },
 
+    /**
+     * Observations libres de la séance : déroulement du recalage, affectation
+     * de densité retenue. Rien ne les calcule — c'est ce qui explique après
+     * coup pourquoi une séance ressemble à ce qu'elle est.
+     *
+     * Tracées à l'enregistrement, pas à chaque frappe : le journal garderait
+     * sinon une entrée par caractère.
+     */
+    noterSeance: (numero: number, champ: 'recalage' | 'densites', texte: string) => {
+      const propre = texte.trim()
+      patch(numero, champ === 'recalage' ? { noteRecalage: propre } : { noteDensites: propre })
+      const quoi = champ === 'recalage' ? 'Déroulement du recalage' : 'Affectation de densité'
+      tracer({
+        categorie: 'note',
+        seance: numero,
+        libelle: propre
+          ? `${quoi} noté pour la séance ${numero}`
+          : `${quoi} effacé pour la séance ${numero}`,
+        detail: propre || undefined,
+      })
+    },
+
     devaliderSeance: (numero: number) => {
       patch(numero, { validee: false })
       tracer({
