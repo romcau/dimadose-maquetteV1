@@ -3,8 +3,12 @@
  *
  * Trois gestes, dans cet ordre : finaliser la séance, consulter son rapport,
  * la clôturer. Les deux derniers restent inertes tant que la première n'est
- * pas faite — ils n'auraient rien à montrer, et rien à fermer. Avant eux,
- * l'IRM de contrôle si elle a été acquise.
+ * pas faite — ils n'auraient rien à montrer, et rien à fermer.
+ *
+ * Avant eux : l'IRM de contrôle si elle a été acquise, et le commentaire pour
+ * la séance suivante. Il se laisse avant de finaliser, parce que c'est au
+ * moment de fermer la séance qu'on sait ce qu'il faut en dire — finaliser
+ * l'enregistre avec le reste.
  *
  * Pas de validation d'étape ici : la séance est délivrée, il n'y a plus rien à
  * vérifier avant de passer à la suite. Il reste à l'enregistrer et à partir.
@@ -110,12 +114,47 @@ export default function StepDonneesSupplementaires({
 
         <div className="p-5 flex flex-col gap-4">
 
+          {/* Le commentaire se laisse avant de finaliser : c'est au moment où
+              l'on ferme la séance qu'on sait ce qu'il faut en dire. Finaliser
+              l'enregistre avec le reste. */}
+          {peutSaisir && !finalisee && (
+            <div>
+              {!ouvert ? (
+                <button
+                  type="button"
+                  onClick={() => setOuvert(true)}
+                  className="text-xs text-slate-400 hover:text-clinical transition-colors"
+                >
+                  + Ajouter un commentaire pour la séance suivante (facultatif)
+                </button>
+              ) : (
+                <>
+                  <div className="text-xs font-semibold text-slate-500">
+                    Commentaire pour la séance suivante
+                    <span className="font-normal text-slate-400"> — facultatif, repris au rapport</span>
+                  </div>
+                  <textarea
+                    value={commentaire}
+                    onChange={e => setCommentaire(e.target.value)}
+                    rows={2}
+                    placeholder="Ce qu'il faut savoir avant la prochaine séance…"
+                    className="mt-1.5 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
+                      focus:outline-none focus:border-clinical"
+                  />
+                </>
+              )}
+            </div>
+          )}
+
           {/* Les trois gestes de la clôture, dans l'ordre. Les deux derniers
               restent inertes tant que la séance n'est pas finalisée : ils
               n'auraient rien à montrer, et rien à fermer. */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
-              onClick={onFinaliser}
+              onClick={() => {
+                if (commentaireModifie) d.commenterEtape(sessionNum, 'step-5', commentaire)
+                onFinaliser()
+              }}
               disabled={!peutSaisir || finalisee}
               className="flex items-center gap-2 bg-clinical hover:bg-clinical-mid
                 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed
@@ -139,10 +178,7 @@ export default function StepDonneesSupplementaires({
             </button>
 
             <button
-              onClick={() => {
-                if (commentaireModifie) d.commenterEtape(sessionNum, 'step-5', commentaire)
-                onCloturer()
-              }}
+              onClick={onCloturer}
               disabled={!finalisee}
               title={finalisee ? undefined : 'Disponible une fois la séance finalisée'}
               className="flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl transition-colors
@@ -164,7 +200,8 @@ export default function StepDonneesSupplementaires({
 
           {finalisee && (
             <>
-              {/* La date de la suivante, sans objet à la dernière séance */}
+              {/* Ce qui suit la séance : la date de la prochaine, et le
+                  commentaire laissé, encore corrigeable. */}
               {!derniereSeance && (
                 <label className="flex flex-col gap-1.5 max-w-xs border-t border-slate-100 pt-4">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -186,43 +223,39 @@ export default function StepDonneesSupplementaires({
                 </label>
               )}
 
-              {/* Un mot pour la séance suivante, comme aux autres étapes.
-                  « Clôturer » l'enregistre au passage. */}
-              {peutSaisir && (
+              {peutSaisir && (commentaire || enregistre) && (
                 <div className="border-t border-slate-100 pt-4">
-                  {!ouvert ? (
+                  <div className="text-xs font-semibold text-slate-500">
+                    Commentaire pour la séance suivante
+                    <span className="font-normal text-slate-400"> — repris au rapport</span>
+                  </div>
+                  <textarea
+                    value={commentaire}
+                    onChange={e => setCommentaire(e.target.value)}
+                    rows={2}
+                    className="mt-1.5 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
+                      focus:outline-none focus:border-clinical"
+                  />
+                  {commentaireModifie && (
                     <button
                       type="button"
-                      onClick={() => setOuvert(true)}
-                      className="text-xs text-slate-400 hover:text-clinical transition-colors"
+                      onClick={() => d.commenterEtape(sessionNum, 'step-5', commentaire)}
+                      className="mt-2 text-xs px-3 py-1.5 bg-clinical hover:bg-clinical-mid text-white
+                        rounded-xl font-semibold transition-colors"
                     >
-                      + Ajouter un commentaire pour la séance suivante (facultatif)
+                      Enregistrer le commentaire
                     </button>
-                  ) : (
-                    <>
-                      <div className="text-xs font-semibold text-slate-500">
-                        Commentaire pour la séance suivante
-                        <span className="font-normal text-slate-400"> — facultatif, repris au rapport</span>
-                      </div>
-                      <textarea
-                        value={commentaire}
-                        onChange={e => setCommentaire(e.target.value)}
-                        rows={2}
-                        placeholder="Ce qu'il faut savoir avant la prochaine séance…"
-                        className="mt-1.5 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
-                          focus:outline-none focus:border-clinical"
-                      />
-                    </>
                   )}
                 </div>
               )}
 
-              <div className="text-xs text-slate-400 leading-relaxed border-t border-slate-100 pt-3">
-                {derniereSeance
-                  ? 'Dernière séance du protocole : le rapport de fin de traitement reste accessible depuis le dossier.'
-                  : `L'évaluation inter-séance de la séance ${sessionNum} reste à valider (moment A), `
-                    + 'hors ligne, avant la séance suivante.'}
-              </div>
+              {/* Rien à annoncer entre deux séances : la séance est close. */}
+              {derniereSeance && (
+                <div className="text-xs text-slate-400 leading-relaxed border-t border-slate-100 pt-3">
+                  Dernière séance du protocole : le rapport de fin de traitement reste accessible
+                  depuis le dossier.
+                </div>
+              )}
             </>
           )}
         </div>
