@@ -12,6 +12,7 @@ import StepValidateBar from './components/StepValidateBar'
 import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
 import DicomRecap from './components/DicomRecap'
 import QualifierSeance from './components/QualifierSeance'
+import DecisionModal from './components/DecisionModal'
 import { DossierProvider, useDossier } from './store'
 import { comptesInitiaux, libellesRoles, type Compte, type Role, type Voie } from './data'
 import { droits as calculerDroits, etatApresSeance, formatDateCourte, formatHorodatage } from './logic'
@@ -227,7 +228,22 @@ function PatientView({
     setValidatedSteps(prev => { const s = new Set(prev); s.delete(step); return s })
   }
 
-  // La décision clinique est requise avant de passer à l'adaptation.
+  /**
+   * Toute navigation du workflow passe par ici.
+   *
+   * L'adaptation ne peut pas s'ouvrir sans que la voie soit tranchée : c'est
+   * la décision qui dit ce que l'étape fera — un décalage de table, ou un
+   * recontourage et une réoptimisation. La fenêtre s'ouvre donc quelle que
+   * soit la route empruntée : le bouton du bas, la barre latérale ou le
+   * bandeau du haut. Sans ce point de passage unique, deux routes sur trois
+   * l'évitaient.
+   */
+  const allerA = (cible: Page) => {
+    if (cible === 'step-3' && !decision) { setDecisionModalOpen(true); return }
+    setPage(cible)
+  }
+
+  // Le bouton de bas d'étape valide l'IRM du jour au passage.
   const goToAdaptation = () => {
     if (!decision) { setDecisionModalOpen(true); return }
     validate('step-2'); setPage('step-3')
@@ -351,7 +367,7 @@ function PatientView({
         <Sidebar
           patient={p}
           current={page}
-          onChange={setPage}
+          onChange={allerA}
           validatedSteps={validatedSteps}
           onOpenDicom={() => setDicomOpen(true)}
           onOpenMoment={setActiveModal}
@@ -360,7 +376,7 @@ function PatientView({
         <div className="flex-1 flex flex-col overflow-hidden">
           <WorkflowProgress
             current={page}
-            onChange={setPage}
+            onChange={allerA}
             completions={completions}
             collapsed={planningDone ? new Set(['step-1']) : new Set()}
             onOpenDicom={() => setDicomOpen(true)}
@@ -563,71 +579,16 @@ function PatientView({
         </div>
       )}
 
-      {/* ── Décision clinique ATP / ATS ── */}
+      {/* ── Décision clinique ATP / ATS — passage obligé vers l'adaptation ── */}
       {decisionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-app-sidebar/60 backdrop-blur-sm" onClick={() => setDecisionModalOpen(false)} />
-          <div className="relative bg-white rounded-3xl w-full max-w-lg overflow-hidden">
-            <div className="bg-app-sidebar px-6 py-5 text-white">
-              <div className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-0.5">
-                Décision clinique — Séance {sessionNum}
-              </div>
-              <div className="text-lg font-bold">Adaptation ATP ou ATS ?</div>
-            </div>
-            <div className="p-6 flex flex-col gap-4">
-              <div className="text-sm text-slate-500 leading-relaxed">
-                La décision d'adaptation doit être validée par le{' '}
-                <strong className="text-slate-700">radiothérapeute</strong> avant de poursuivre.
-                DIMADOSE recommande <strong className={reco.voie === 'ATS' ? 'text-warn' : 'text-ok'}>{reco.voie}</strong>{' '}
-                pour cette séance (confiance {reco.confiance}).
-              </div>
-
-              {!droits.peutDeciderVoie ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-500">
-                  Votre profil ne permet pas de valider la décision clinique. Un radiothérapeute doit
-                  trancher entre ATP et ATS.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {(['ATP', 'ATS'] as Voie[]).map(v => (
-                    <button
-                      key={v}
-                      onClick={() => confirmDecision(v)}
-                      className={`flex flex-col items-start px-4 py-4 rounded-2xl border-2 text-left transition-all ${
-                        v === reco.voie
-                          ? 'bg-clinical-light border-clinical hover:bg-clinical hover:text-white group'
-                          : 'bg-slate-50 border-slate-200 hover:border-clinical/50'
-                      }`}
-                    >
-                      <div className={`text-base font-bold ${v === reco.voie ? 'text-clinical group-hover:text-white' : 'text-slate-700'}`}>
-                        {v}
-                        {v === reco.voie && <span className="text-xs font-normal ml-1.5">recommandé</span>}
-                      </div>
-                      <div className={`text-xs mt-1 leading-tight ${v === reco.voie ? 'text-clinical/70 group-hover:text-white/80' : 'text-slate-400'}`}>
-                        {v === 'ATP'
-                          ? 'Adapt To Position — décalage table, plan de référence appliqué'
-                          : 'Adapt To Shape — recontourage + réoptimisation'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <button
-                onClick={() => { setDecisionModalOpen(false); setActiveModal('moment-B') }}
-                className="text-xs text-clinical hover:underline self-center"
-              >
-                Voir la justification complète (moment B)
-              </button>
-              <button
-                onClick={() => setDecisionModalOpen(false)}
-                className="text-xs text-slate-400 hover:text-slate-600 transition-colors self-center"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
+        <DecisionModal
+          seance={sessionNum}
+          reco={reco}
+          peutDecider={droits.peutDeciderVoie}
+          onChoisir={confirmDecision}
+          onVoirAnalyse={() => { setDecisionModalOpen(false); setActiveModal('moment-B') }}
+          onFermer={() => setDecisionModalOpen(false)}
+        />
       )}
     </div>
   )
