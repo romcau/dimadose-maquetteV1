@@ -4,7 +4,7 @@ import { etatsMoments, imc, lireIMC, type MomentId } from '../logic'
 import { MACHINES } from '../data'
 import { versionCourte, versionDetaillee } from '../version'
 
-export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4'
+export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4' | 'step-5'
 
 interface Props {
   patient: PatientRecord
@@ -21,6 +21,7 @@ const workflowSteps: { id: Page; num: string; label: string; sub: string; gating
   { id: 'step-2', num: '2', label: 'IRM du jour',       sub: 'Acquisition · Recalage' },
   { id: 'step-3', num: '3', label: 'Adaptation',        sub: 'ATP / ATS · Cumul dose'  },
   { id: 'step-4', num: '4', label: 'Gating et délivrance', sub: 'Suivi intra-séance', gating: true },
+  { id: 'step-5', num: '5', label: 'Données supplémentaires', sub: 'Post-traitement · clôture' },
 ]
 
 export default function Sidebar({

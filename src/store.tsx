@@ -454,6 +454,22 @@ export function DossierProvider({
       })
     },
 
+    /**
+     * IRM post-traitement : acquise après la délivrance, jamais exigée.
+     * Elle ne nourrit aucun calcul de la maquette ; sa présence est notée
+     * pour que le dossier dise qu'elle existe.
+     */
+    chargerIrmPostTraitement: (numero: number, charge: boolean) => {
+      patch(numero, { irmPostTraitement: charge })
+      tracer({
+        categorie: 'dose',
+        seance: numero,
+        libelle: charge
+          ? `IRM post-traitement chargée pour la séance ${numero}`
+          : `IRM post-traitement retirée de la séance ${numero}`,
+      })
+    },
+
     devaliderSeance: (numero: number) => {
       patch(numero, { validee: false })
       tracer({

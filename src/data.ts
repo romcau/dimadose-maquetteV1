@@ -29,6 +29,7 @@ export const libellesEtapes: Record<string, string> = {
   'step-2': 'IRM du jour',
   'step-3': 'Adaptation',
   'step-4': 'Gating et délivrance du traitement',
+  'step-5': 'Données supplémentaires (post-traitement)',
 }
 
 // ─── Gating : seuil du protocole ─────────────────────────────────────────────

@@ -89,6 +89,8 @@ export interface DecisionsSeance {
    * d'autre ne transporte. Repris au rapport de traitement.
    */
   commentairesEtape?: Record<string, string>
+  /** IRM acquise après la séance, facultative — voir l'étape 5. */
+  irmPostTraitement?: boolean
   atpOptionnel?: {
     /** Plan effectivement délivré, s'il diffère du plan de référence. */
     rtplan?: boolean

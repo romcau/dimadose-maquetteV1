@@ -108,6 +108,8 @@ export interface DossierContexte {
   commenterEtape: (numero: number, etape: string, texte: string) => void
   /** Données facultatives rechargées après une séance ATP. */
   chargerOptionnelATP: (numero: number, objet: 'rtplan' | 'rtdose' | 'irmv', charge: boolean) => void
+  /** IRM acquise après la séance, facultative. */
+  chargerIrmPostTraitement: (numero: number, charge: boolean) => void
   /** Ce que l'équipe rapporte de la délivrance : gating, seuil, durée. */
   enregistrerGating: (numero: number, suivi: Omit<SuiviGating, 'par' | 'horodatage'>) => void
   /** Qualifie la séance en fin de workflow : code couleur et ce qui s'est passé. */

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import LoginScreen from './components/LoginScreen'
 import DimadoseLogo from './components/DimadoseLogo'
 import Dashboard, { patientsDemo, type PatientRecord } from './components/Dashboard'
@@ -12,8 +12,9 @@ import StepValidateBar from './components/StepValidateBar'
 import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
 import DicomRecap from './components/DicomRecap'
 import QualifierSeance from './components/QualifierSeance'
+import StepDonneesSupplementaires from './components/steps/StepDonneesSupplementaires'
 import DecisionModal from './components/DecisionModal'
-import CommentairesPrecedents from './components/CommentairesPrecedents'
+import RecapSeancePrecedente from './components/RecapSeancePrecedente'
 import { DossierProvider, useDossier } from './store'
 import { comptesInitiaux, libellesRoles, type Compte, type Role, type Voie } from './data'
 import { droits as calculerDroits, etatApresSeance, formatDateCourte, formatHorodatage } from './logic'
@@ -39,7 +40,8 @@ const stepNextLabel: Record<Page, string> = {
   'step-1': "Passer à l'IRM du jour",
   'step-2': "Passer à l'adaptation",
   'step-3': 'Passer au gating',
-  'step-4': 'Terminer le workflow',
+  'step-4': 'Passer aux données supplémentaires',
+  'step-5': 'Terminer le workflow',
 }
 
 export default function App() {
@@ -178,15 +180,34 @@ function PatientView({
   // Les droits sont calculés une seule fois, dans le moteur, et partagés.
   const droits = d.droits
 
-  // Séance suivante : le planning initial reste acquis, on reprend à l'IRM du jour.
-  const startNextSession = () => {
-    d.setSeanceCourante(sessionNum + 1)
+  /**
+   * Ouvrir la séance suivante : le planning initial reste acquis, on reprend à
+   * l'IRM du jour.
+   *
+   * Déclenché en rouvrant le dossier après une séance finalisée : la fiche
+   * patient a avancé, le dossier la rattrape. C'est là, et non à la fin du
+   * workflow, que la séance suivante commence — on repasse par le tableau de
+   * bord entre deux séances, comme dans le service.
+   */
+  const startNextSession = useCallback(() => {
+    d.setSeanceCourante(p.seanceCourante)
     setDecisionVue(false)
     setValidatedSteps(new Set(['step-1']))
     setWorkflowDone(false)
     setActiveModal(null)
     setPage('step-2')
-  }
+  }, [d, p.seanceCourante])
+
+  // La fiche patient est en avance sur le dossier : la séance d'après est à
+  // ouvrir. On ne le fait qu'une fois, à l'ouverture du dossier.
+  const rattrapageFait = useRef(false)
+  useEffect(() => {
+    if (rattrapageFait.current) return
+    if (p.seanceCourante > d.seanceCourante && p.seanceCourante <= p.totalSeances) {
+      rattrapageFait.current = true
+      startNextSession()
+    }
+  }, [p.seanceCourante, p.totalSeances, d.seanceCourante, startNextSession])
 
   /**
    * La séance vient d'être délivrée : le dossier avance dans la liste patients.
@@ -259,7 +280,7 @@ function PatientView({
    */
   const decisionRequise = droits.peutDeciderVoie && !decisionVue
 
-  const ORDRE: Page[] = ['step-1', 'step-2', 'step-3', 'step-4']
+  const ORDRE: Page[] = ['step-1', 'step-2', 'step-3', 'step-4', 'step-5']
 
   /**
    * Revenir à l'étape précédente en annulant celle-ci.
@@ -307,6 +328,7 @@ function PatientView({
     'step-2': validatedSteps.has('step-2') ? 100 : 0,
     'step-3': validatedSteps.has('step-3') ? 100 : 0,
     'step-4': validatedSteps.has('step-4') ? 100 : 0,
+    'step-5': validatedSteps.has('step-5') ? 100 : 0,
   }
 
   const planningDone = validatedSteps.has('step-1') || sessionNum > 1
@@ -427,7 +449,7 @@ function PatientView({
           />
 
           <div className="flex-1 overflow-y-auto p-6">
-            <CommentairesPrecedents seance={sessionNum} />
+            <RecapSeancePrecedente seance={sessionNum} />
 
             {page === 'step-1' && (
               <>
@@ -498,79 +520,48 @@ function PatientView({
                   validated={validatedSteps.has('step-4')}
                   seance={sessionNum}
                   etape="step-4"
-                  onValidate={() => { validate('step-4'); terminerSeance() }}
-                  onUnvalidate={() => { unvalidate('step-4'); setWorkflowDone(false) }}
+                  onValidate={() => validate('step-4')}
+                  onUnvalidate={() => unvalidate('step-4')}
+                  nextLabel={stepNextLabel['step-4']}
+                  onNext={() => { validate('step-4'); setPage('step-5') }}
                   canValidate={droits.peutValiderEtape}
                   onBack={revenirEnArriere}
                 />
 
-                {workflowDone && validatedSteps.has('step-4') && (
+              </>
+            )}
+
+            {page === 'step-5' && (
+              <>
+                <StepDonneesSupplementaires
+                  sessionNum={sessionNum}
+                  totalSeances={p.totalSeances}
+                  voie={decision ?? null}
+                  finalisee={workflowDone}
+                  prochaineSeance={prochaineSeance}
+                  onChangerProchaineSeance={changerProchaineSeance}
+                  onFinaliser={() => { validate('step-5'); terminerSeance() }}
+                  onVoirRecap={() => setActiveModal('moment-A')}
+                  onVoirRapport={() => setActiveModal('moment-D')}
+                  onRetourDashboard={onBackToDashboard}
+                  peutSaisir={droits.peutValiderEtape}
+                />
+
+                {/* La qualification ferme la séance : elle n'a de sens qu'une
+                    fois la séance finalisée. */}
+                {workflowDone && (
                   <QualifierSeance seance={sessionNum} peutQualifier={droits.peutValiderEtape} />
                 )}
 
-                {workflowDone && validatedSteps.has('step-4') && (
-                  <div className="max-w-4xl mx-auto w-full bg-app-sidebar rounded-3xl px-6 py-5 text-white flex items-center justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-bold flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-ok text-white flex items-center justify-center text-xs">✓</span>
-                        Séance {sessionNum} terminée — voie {decision ?? '—'}
-                      </div>
-                      <div className="text-sm opacity-70 mt-1">
-                        {sessionNum < p.totalSeances ? (
-                          <>
-                            L'évaluation inter-séance de la séance {sessionNum} reste à valider (moment A).
-                            Prochaine séance{' '}
-                            <strong className="opacity-100">
-                              {prochaineSeance ? formatDateCourte(prochaineSeance) : 'à planifier'}
-                            </strong>{' '}
-                            — le tableau de bord est à jour.
-                          </>
-                        ) : (
-                          <>Dernière séance du protocole — le rapport de fin de traitement est disponible.</>
-                        )}
-                      </div>
-                    </div>
-                    <div className="shrink-0 flex items-center gap-2">
-                      {sessionNum < p.totalSeances && (
-                        <label className="flex flex-col gap-1 mr-2">
-                          <span className="text-xs opacity-60">Prochaine séance</span>
-                          <input
-                            type="date"
-                            value={prochaineSeance}
-                            onChange={e => changerProchaineSeance(e.target.value)}
-                            disabled={!droits.peutValiderEtape}
-                            className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-clinical disabled:opacity-50 disabled:cursor-not-allowed"
-                          />
-                        </label>
-                      )}
-                      <button
-                        onClick={() => setActiveModal('moment-A')}
-                        title="Qualité de l'IRM, déformation, dose retenue et cumul de la séance"
-                        className="text-sm font-semibold px-4 py-2.5 rounded-2xl border border-white/20 text-white/80 hover:bg-white/10 transition-colors"
-                      >
-                        Récap de la séance
-                      </button>
-                      {sessionNum < p.totalSeances ? (
-                        <button
-                          onClick={startNextSession}
-                          className="flex items-center gap-2 bg-clinical hover:bg-clinical-mid text-white text-sm font-semibold px-4 py-2.5 rounded-2xl transition-colors"
-                        >
-                          Démarrer la séance {sessionNum + 1}
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setActiveModal('moment-D')}
-                          className="bg-clinical hover:bg-clinical-mid text-white text-sm font-semibold px-4 py-2.5 rounded-2xl transition-colors"
-                        >
-                          Ouvrir le rapport final
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <StepValidateBar
+                  validated={validatedSteps.has('step-5')}
+                  seance={sessionNum}
+                  etape="step-5"
+                  onValidate={() => { validate('step-5'); terminerSeance() }}
+                  onUnvalidate={() => { unvalidate('step-5'); setWorkflowDone(false) }}
+                  canValidate={droits.peutValiderEtape}
+                  onBack={revenirEnArriere}
+                />
               </>
             )}
           </div>
