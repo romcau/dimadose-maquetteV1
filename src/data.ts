@@ -159,6 +159,49 @@ export interface Structure {
   prevuParSeance: number
 }
 
+// ─── Affectations de densité du RTSSp ────────────────────────────────────────
+
+/**
+ * L'IRM ne donne pas de densité électronique : le calcul de dose s'appuie sur
+ * des densités affectées en bloc aux structures du RTSSp. Ce qui est affecté
+ * change donc la dose calculée, sans que rien ne le montre dans les images.
+ *
+ * Mesures brutes : ce qui est écrit dans le RTSSp, et ce que le protocole
+ * prévoyait. L'écart entre les deux est dérivé dans `logic.ts`.
+ */
+export interface AffectationDensite {
+  /** Structure du RTSSp. */
+  structure: string
+  /** Matériau de référence de l'affectation. */
+  materiau: string
+  /** Densité massique prévue par le protocole, g/cm³. */
+  densiteProtocole: number
+  /**
+   * Densité réellement affectée dans le RTSSp.
+   * `null` : aucune affectation — la structure hérite du contour externe.
+   */
+  densiteAffectee: number | null
+  /** D'où vient la valeur affectée. */
+  origine: 'protocole' | 'ct-planification' | 'manuelle'
+}
+
+export const affectationsDensite: AffectationDensite[] = [
+  { structure: 'External',   materiau: 'Eau',         densiteProtocole: 1.000,  densiteAffectee: 1.000,  origine: 'protocole' },
+  { structure: 'Prostate',   materiau: 'Tissu mou',   densiteProtocole: 1.040,  densiteAffectee: 1.040,  origine: 'protocole' },
+  { structure: 'Vessie',     materiau: 'Urine',       densiteProtocole: 1.010,  densiteAffectee: 1.010,  origine: 'protocole' },
+  { structure: 'Rectum',     materiau: 'Tissu mou',   densiteProtocole: 1.030,  densiteAffectee: 1.030,  origine: 'protocole' },
+  { structure: 'Gaz rectal', materiau: 'Air',         densiteProtocole: 0.0012, densiteAffectee: 0.0012, origine: 'manuelle' },
+  { structure: 'TF Gauche',  materiau: 'Os cortical', densiteProtocole: 1.610,  densiteAffectee: 1.610,  origine: 'ct-planification' },
+  { structure: 'TF Droite',  materiau: 'Os cortical', densiteProtocole: 1.610,  densiteAffectee: 1.480,  origine: 'manuelle' },
+  { structure: 'Urètre',     materiau: 'Tissu mou',   densiteProtocole: 1.040,  densiteAffectee: null,   origine: 'protocole' },
+]
+
+export const libellesOrigineDensite: Record<AffectationDensite['origine'], string> = {
+  'protocole': 'Protocole',
+  'ct-planification': 'CT de planification',
+  'manuelle': 'Saisie manuelle',
+}
+
 export const structures: Structure[] = [
   { id: 'ptv-d95',      nom: 'PTV',        type: 'cible', metrique: 'D95%',   sens: 'min', unite: 'Gy', contrainteRef: 6.88, objectifTotal: 34.40, prevuParSeance: 6.87 },
   { id: 'prostate-d50', nom: 'Prostate',   type: 'cible', metrique: 'D50%',   sens: 'max', unite: 'Gy', contrainteRef: 7.25, objectifTotal: 36.25, prevuParSeance: 7.03 },

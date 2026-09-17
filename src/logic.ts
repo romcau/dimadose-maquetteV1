@@ -13,10 +13,12 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 import {
+  affectationsDensite,
   dossier,
   formatNombre,
   mesuresSeances,
   structures,
+  type AffectationDensite,
   type CritereComparaison,
   type MesuresDeformation,
   type MesuresQualite,
@@ -149,6 +151,44 @@ export function droits(role: Role): Droits {
     voitIdentitePatient: interne,
     peutGererPatients: interne && !lectureSeule,
   }
+}
+
+// ─── Densités affectées au RTSSp ─────────────────────────────────────────────
+
+export interface LigneDensite extends AffectationDensite {
+  /** Aucune densité affectée : la structure hérite du contour externe. */
+  absente: boolean
+  /** La densité affectée diffère de celle prévue par le protocole. */
+  ecart: boolean
+  /** Écart en g/cm³, signé. `null` quand il n'y a rien à comparer. */
+  delta: number | null
+}
+
+/**
+ * Lecture des affectations de densité.
+ *
+ * Deux choses seulement méritent l'attention d'un physicien qui relit le
+ * RTSSp : une structure sans affectation, qui prend alors la densité du
+ * contour externe sans que personne l'ait décidé, et une densité qui s'écarte
+ * du protocole. Le reste est conforme et doit se lire d'un coup d'œil.
+ */
+export function lireAffectationsDensite(): LigneDensite[] {
+  return affectationsDensite.map(a => {
+    const absente = a.densiteAffectee === null
+    return {
+      ...a,
+      absente,
+      ecart: !absente && a.densiteAffectee !== a.densiteProtocole,
+      delta: absente ? null : a.densiteAffectee! - a.densiteProtocole,
+    }
+  })
+}
+
+/** Ce qu'il y a à signaler, pour l'annoncer sans parcourir le tableau. */
+export function resumeDensites(lignes: LigneDensite[]) {
+  const ecarts = lignes.filter(l => l.ecart).length
+  const absentes = lignes.filter(l => l.absente).length
+  return { total: lignes.length, ecarts, absentes, conforme: ecarts === 0 && absentes === 0 }
 }
 
 // ─── Morphologie ─────────────────────────────────────────────────────────────

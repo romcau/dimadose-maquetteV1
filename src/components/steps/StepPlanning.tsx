@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { type PatientRecord } from '../Dashboard'
 import { useDossier } from '../../store'
+import TableauDensites from './TableauDensites'
 
 type FileStatus = 'pending' | 'uploading' | 'done' | 'missing'
 
@@ -91,6 +92,9 @@ export default function StepPlanning({ patient, canUpload, locked }: Props) {
   const [modeAcq, setModeAcq] = useState(cfg.defaultMode)
 
   const allRequiredDone = data.files.filter(f => f.uploadable).every(f => f.status === 'done')
+
+  // Le tableau lit le RTSSp : il n'a rien à montrer tant qu'il n'est pas chargé.
+  const rtssCharge = data.files.find(f => f.id === 'RTSSp')?.status === 'done'
   const canEdit = canUpload && !locked
 
   return (
@@ -179,6 +183,9 @@ export default function StepPlanning({ patient, canUpload, locked }: Props) {
           canUpload={canEdit}
         />
       </div>
+
+      {/* ── Densités affectées, dès que le RTSSp est là ── */}
+      {rtssCharge && <TableauDensites />}
 
       {/* ── Prêt pour la suite ── */}
       <div className={`rounded-3xl p-5 border transition-all ${
