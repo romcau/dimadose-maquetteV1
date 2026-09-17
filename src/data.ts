@@ -31,6 +31,52 @@ export const libellesEtapes: Record<string, string> = {
   'step-4': 'Gating',
 }
 
+// ─── Machines de traitement ──────────────────────────────────────────────────
+
+export type Machine = 'unity' | 'mridian'
+
+export interface DescriptionMachine {
+  id: Machine
+  /** Nom complet, constructeur compris. */
+  label: string
+  /** Nom court, pour les endroits étroits. */
+  court: string
+  /** Comment s'appelle l'IRM embarquée dans les écrans. */
+  irm: string
+  /** Système de planification associé. */
+  tps: string
+  /**
+   * Le flux DIMADOSE est décrit pour cette machine.
+   *
+   * Faux pour MRIdian : le workflow affiché reste celui d'Unity. Le dire plutôt
+   * que de laisser croire qu'il s'applique — un relecteur doit savoir ce qui a
+   * été conçu et ce qui ne l'est pas encore.
+   */
+  fluxDefini: boolean
+}
+
+export const MACHINES: Record<Machine, DescriptionMachine> = {
+  unity: {
+    id: 'unity',
+    label: 'Elekta Unity',
+    court: 'Unity',
+    irm: 'IRM Unity',
+    tps: 'TPS Monaco',
+    fluxDefini: true,
+  },
+  mridian: {
+    id: 'mridian',
+    label: 'ViewRay MRIdian',
+    court: 'MRIdian',
+    irm: 'IRM MRIdian',
+    tps: 'TPS MRIdian',
+    fluxDefini: false,
+  },
+}
+
+/** Machine d'un dossier créé avant que le choix existe. */
+export const MACHINE_PAR_DEFAUT: Machine = 'unity'
+
 // ─── Profils utilisateurs ────────────────────────────────────────────────────
 
 export type Role = 'physicien' | 'medecin' | 'manipulateur' | 'partenaire'

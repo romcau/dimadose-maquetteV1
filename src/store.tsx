@@ -23,7 +23,10 @@ import {
   dossier,
   libellesEtapes,
   libellesRoles,
+  MACHINES,
+  MACHINE_PAR_DEFAUT,
   type CritereComparaison,
+  type Machine,
   type Voie,
 } from './data'
 import {
@@ -107,12 +110,15 @@ export function DossierProvider({
   children,
   dossierId = dossier.id,
   utilisateur = utilisateurParDefaut,
+  machine = MACHINE_PAR_DEFAUT,
   seanceInitiale = dossier.seanceCourante,
 }: {
   children: ReactNode
   /** Clé d'enregistrement — un dossier, un état. */
   dossierId?: string
   utilisateur?: Utilisateur
+  /** Machine du dossier ; par défaut celle dont le flux est décrit. */
+  machine?: Machine
   /** Séance sur laquelle ouvrir le dossier (séance du jour). */
   seanceInitiale?: number
 }) {
@@ -464,6 +470,7 @@ export function DossierProvider({
     dossierId,
     utilisateur,
     droits,
+    machine: MACHINES[machine],
     identite,
     seanceCourante,
     decisions,
@@ -494,7 +501,7 @@ export function DossierProvider({
     reinitialiserContrainte,
     reinitialiserContraintes,
   }), [
-    dossierId, utilisateur, droits, identite, seanceCourante, decisions, critere, irmref,
+    dossierId, utilisateur, droits, machine, identite, seanceCourante, decisions, critere, irmref,
     contraintesEditees, trace, seances, seance, cumul, cumulJusqua, recommandation,
     propositions, valeurContrainte, contraintesModifiees, rapport, alertes,
     persistant, enregistreLe, reinitialiser, tracer, actions,

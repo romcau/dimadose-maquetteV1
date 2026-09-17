@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { type PatientRecord } from '../Dashboard'
+import { useDossier } from '../../store'
 
 type FileStatus = 'pending' | 'uploading' | 'done' | 'missing'
 
@@ -82,6 +83,7 @@ function resolveLoc(protocole: string) {
 }
 
 export default function StepPlanning({ patient, canUpload, locked }: Props) {
+  const d = useDossier()
   const data = useUploadFiles(initialData)
 
   const locKey = resolveLoc(patient.protocole)
@@ -168,7 +170,7 @@ export default function StepPlanning({ patient, canUpload, locked }: Props) {
         {/* Right — données initiales */}
         <FileSection
           title="Données initiales (DICOM)"
-          subtitle="Récupérées depuis le PACS / Monaco"
+          subtitle={`Récupérées depuis le PACS / ${d.machine.tps}`}
           files={data.files}
           onUpload={data.trigger}
           onRemove={data.remove}

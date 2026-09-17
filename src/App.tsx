@@ -113,6 +113,7 @@ export default function App() {
       key={patient.id}
       dossierId={patient.id}
       utilisateur={{ nom: user.name, role: user.role }}
+      machine={patient.machine}
       seanceInitiale={Math.max(patient.seanceCourante, 1)}
     >
       <PatientView

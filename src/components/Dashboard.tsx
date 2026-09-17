@@ -4,12 +4,23 @@ import DimadoseLogo from './DimadoseLogo'
 import SessionRecap from './SessionRecap'
 import { DossierProvider, alertesPourDossier, verdictsPourDossier } from '../store'
 import { versionCourte, versionDetaillee } from '../version'
-import { libellesRoles, nomAffiche, type Compte, type Role } from '../data'
+import {
+  libellesRoles,
+  MACHINES,
+  MACHINE_PAR_DEFAUT,
+  nomAffiche,
+  type Compte,
+  type Machine,
+  type Role,
+} from '../data'
 import { effacer as effacerDossierEnregistre, effacerListePatients } from '../persistence'
 import {
   couleursCodeSeance,
+  formatDateCourte,
   identiteAffichee,
+  imc,
   libellesCodeSeance,
+  lireIMC,
   type VerdictSeance,
 } from '../logic'
 import type { Utilisateur } from '../dossierContext'
@@ -46,6 +57,24 @@ export interface PatientRecord {
   physicien: string
   dernierePar?: string
   historique?: { etape: string; par: string; date: string }[]
+  /** Taille en cm et poids en kg. L'IMC s'en déduit, il n'est pas stocké. */
+  tailleCm?: number
+  poidsKg?: number
+  /** Machine de traitement. Absente sur un dossier créé avant le choix. */
+  machine?: Machine
+  /**
+   * Date saisie à la création et ce qu'elle désigne. Une date de simulation ne
+   * dit pas quand aura lieu la première séance : les deux ne se confondent pas.
+   */
+  dateReference?: { type: TypeDate; date: string }
+}
+
+/** Ce que désigne la date saisie à la création d'un dossier. */
+export type TypeDate = 'simulation' | 'premiere-seance'
+
+const libellesTypeDate: Record<TypeDate, string> = {
+  'simulation': 'Date de simulation',
+  'premiere-seance': 'Date de la première séance',
 }
 
 export const patientsDemo: PatientRecord[] = [
@@ -258,7 +287,12 @@ interface AddPatientForm {
   doseGy: string
   /** Nombre de fractions du protocole. Indépendant de la dose. */
   nbFractions: string
-  premiereSeance: string
+  /** Taille en cm et poids en kg — l'IMC en est déduit. */
+  tailleCm: string
+  poidsKg: string
+  typeDate: TypeDate
+  date: string
+  machine: Machine
 }
 
 const emptyForm: AddPatientForm = {
@@ -266,7 +300,17 @@ const emptyForm: AddPatientForm = {
   localisation: localisations[0].label,
   doseGy: localisations[0].doseGy,
   nbFractions: localisations[0].fractions,
-  premiereSeance: '',
+  tailleCm: '',
+  poidsKg: '',
+  typeDate: 'premiere-seance',
+  date: '',
+  machine: MACHINE_PAR_DEFAUT,
+}
+
+/** IMC du formulaire, ou null tant que les deux mesures ne sont pas saisies. */
+function imcDuFormulaire(f: AddPatientForm) {
+  const valeur = imc(parseFloat(f.tailleCm.replace(',', '.')), parseFloat(f.poidsKg.replace(',', '.')))
+  return valeur === null ? null : lireIMC(valeur)
 }
 
 /** Dose par fraction, seule valeur réellement déduite des deux autres. */
@@ -701,20 +745,29 @@ export default function Dashboard({
       return
     }
     setFormError('')
+    // Quatre chiffres, comme les dossiers existants (P-2024-0148).
     const nextNum = String(patients.length + 200).padStart(4, '0')
     const seances = fractions
     const prescription = `${form.doseGy.trim()} Gy / ${fractions} fr`
     const newPatient: PatientRecord = {
-      id: `P-2026-0${nextNum}`,
+      id: `P-2026-${nextNum}`,
       nom: form.nom.trim().toUpperCase(),
       prenom: form.prenom.trim(),
-      ddn: form.ddn,
+      // Le champ date rend de l'ISO ; la liste affiche du français, comme les
+      // dossiers existants.
+      ddn: form.ddn ? new Date(form.ddn).toLocaleDateString('fr-FR') : '',
       protocole: form.localisation,
       prescription,
       seanceCourante: 0,
       totalSeances: seances,
       dernierSeanceDate: '—',
-      prochaineSeanceDate: form.premiereSeance || '—',
+      // Une date de simulation ne dit pas quand aura lieu la première séance :
+      // la colonne reste vide plutôt que d'annoncer une séance non planifiée.
+      prochaineSeanceDate: form.typeDate === 'premiere-seance' && form.date ? form.date : '—',
+      tailleCm: parseFloat(form.tailleCm.replace(',', '.')) || undefined,
+      poidsKg: parseFloat(form.poidsKg.replace(',', '.')) || undefined,
+      dateReference: form.date ? { type: form.typeDate, date: form.date } : undefined,
+      machine: form.machine,
       statut: 'planification',
       action: 'planification',
       confiance: null,
@@ -1000,6 +1053,13 @@ export default function Dashboard({
                     <span className={p.prochaineSeanceDate === "Aujourd'hui" ? 'text-warn font-semibold' : 'text-slate-500'}>
                       {p.prochaineSeanceDate}
                     </span>
+                    {/* Aucune séance planifiée, mais la simulation est datée :
+                        la colonne le dit plutôt que de rester un tiret muet. */}
+                    {p.prochaineSeanceDate === '—' && p.dateReference?.type === 'simulation' && (
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        Simulation {formatDateCourte(p.dateReference.date)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statutStyles[p.statut]}`}>
@@ -1206,14 +1266,131 @@ export default function Dashboard({
                   </div>
 
 
+                  {/* Machine : le flux de la maquette est celui d'Unity. */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Première séance</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Machine de traitement</label>
+                    <div className="flex gap-2">
+                      {(Object.keys(MACHINES) as Machine[]).map(id => {
+                        const m = MACHINES[id]
+                        const choisie = form.machine === id
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, machine: id }))}
+                            aria-pressed={choisie}
+                            className={`flex-1 text-left px-3 py-2.5 rounded-2xl border transition-colors ${
+                              choisie
+                                ? 'bg-clinical-light border-clinical-border'
+                                : 'bg-white border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className={`block text-xs font-semibold ${choisie ? 'text-clinical' : 'text-slate-600'}`}>
+                              {m.label}
+                            </span>
+                            <span className="block text-[11px] text-slate-400 mt-0.5">
+                              {m.fluxDefini ? m.tps : 'Flux à définir'}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {!MACHINES[form.machine].fluxDefini && (
+                      <div className="mt-2 text-xs bg-warn-bg border border-warn-border text-warn-text rounded-2xl px-4 py-2.5">
+                        Le flux {MACHINES[form.machine].court} n'est pas encore décrit : le dossier
+                        s'ouvrira sur le workflow {MACHINES.unity.court}, signalé comme tel.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Morphologie : taille et poids sont les mesures, l'IMC s'en déduit. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Taille</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          value={form.tailleCm}
+                          onChange={e => setForm(f => ({ ...f, tailleCm: e.target.value }))}
+                          placeholder="175"
+                          className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 pr-10 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">cm</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Poids</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          value={form.poidsKg}
+                          onChange={e => setForm(f => ({ ...f, poidsKg: e.target.value }))}
+                          placeholder="78"
+                          className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 pr-10 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">kg</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* L'IMC est déduit, jamais saisi */}
+                  {(() => {
+                    const lecture = imcDuFormulaire(form)
+                    if (!lecture) {
+                      return (
+                        <div className="-mt-1 text-xs text-slate-400">
+                          Taille et poids donnent l'IMC, qui peut appeler une adaptation du jumeau numérique.
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className={`-mt-1 text-xs rounded-2xl px-4 py-2.5 border ${
+                        lecture.horsPlage
+                          ? 'bg-warn-bg border-warn-border text-warn-text'
+                          : 'bg-slate-50 border-slate-200 text-slate-500'
+                      }`}>
+                        IMC <strong className="font-mono">{lecture.valeur.toFixed(1).replace('.', ',')}</strong>
+                        {' '}kg/m² — {lecture.libelle}.
+                        {lecture.horsPlage && ' Le jumeau numérique demandera probablement une adaptation : à vérifier à la simulation.'}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Ce que la date désigne se choisit : les deux ne se confondent pas. */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Date connue</label>
+                    <div className="flex gap-2 mb-2">
+                      {(Object.keys(libellesTypeDate) as TypeDate[]).map(type => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, typeDate: type }))}
+                          aria-pressed={form.typeDate === type}
+                          className={`flex-1 text-xs font-semibold px-3 py-2 rounded-2xl border transition-colors ${
+                            form.typeDate === type
+                              ? 'bg-clinical-light border-clinical-border text-clinical'
+                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          {libellesTypeDate[type]}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       type="date"
-                      value={form.premiereSeance}
-                      onChange={e => setForm(f => ({ ...f, premiereSeance: e.target.value }))}
+                      value={form.date}
+                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                       className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all"
                     />
+                    <div className="text-xs text-slate-400 mt-1.5">
+                      {form.typeDate === 'simulation'
+                        ? "La première séance reste à planifier : le tableau de bord ne l'annoncera pas."
+                        : 'Le tableau de bord annoncera cette date comme prochaine séance.'}
+                    </div>
                   </div>
                 </div>
               </div>

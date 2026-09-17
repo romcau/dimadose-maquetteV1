@@ -7,7 +7,7 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 import { createContext, useContext } from 'react'
-import type { CritereComparaison, Role, Voie } from './data'
+import type { CritereComparaison, DescriptionMachine, Role, Voie } from './data'
 import type {
   AlerteDossier,
   CandidateDose,
@@ -47,6 +47,8 @@ export interface DossierContexte {
   dossierId: string
   utilisateur: Utilisateur
   droits: Droits
+  /** Machine de traitement du dossier : elle nomme l'IRM et le TPS des écrans. */
+  machine: DescriptionMachine
   /**
    * Comment nommer un dossier à l'écran, selon les droits de qui regarde.
    * Passer par là plutôt que d'afficher `nom`, `prenom` ou `id` directement :

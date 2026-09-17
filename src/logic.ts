@@ -151,6 +151,37 @@ export function droits(role: Role): Droits {
   }
 }
 
+// ─── Morphologie ─────────────────────────────────────────────────────────────
+
+/**
+ * IMC, en kg/m². Déduit de la taille et du poids : ce sont eux qui sont
+ * saisis et conservés, l'indice n'est qu'une lecture.
+ */
+export function imc(tailleCm: number, poidsKg: number): number | null {
+  if (!isFinite(tailleCm) || !isFinite(poidsKg) || tailleCm <= 0 || poidsKg <= 0) return null
+  const m = tailleCm / 100
+  return poidsKg / (m * m)
+}
+
+export interface LectureIMC {
+  valeur: number
+  libelle: string
+  /**
+   * L'IMC sort de la plage courante. Ce n'est pas un verdict : c'est un signal
+   * que le jumeau numérique peut demander une adaptation, à l'équipe d'en
+   * juger. La maquette ne décide pas à sa place.
+   */
+  horsPlage: boolean
+}
+
+export function lireIMC(valeur: number): LectureIMC {
+  // Seuils OMS, donnés comme repère de lecture et non comme règle de traitement.
+  if (valeur < 18.5) return { valeur, libelle: 'Maigreur', horsPlage: true }
+  if (valeur < 25)   return { valeur, libelle: 'Corpulence normale', horsPlage: false }
+  if (valeur < 30)   return { valeur, libelle: 'Surpoids', horsPlage: false }
+  return { valeur, libelle: 'Obésité', horsPlage: true }
+}
+
 // ─── Pseudonymisation des dossiers ───────────────────────────────────────────
 
 /**

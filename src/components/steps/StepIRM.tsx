@@ -155,7 +155,7 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
           <div className="p-4 flex flex-col gap-1">
 
             <WorkflowAction
-              num="1" tool="IRM Unity" toolColor="bg-violet-100 text-violet-700"
+              num="1" tool={d.machine.irm} toolColor="bg-violet-100 text-violet-700"
               title="Acquisition IRM du jour (IRMj)"
               detail="Acquérir l'IRMj sur la console machine, puis la charger dans DIMADOSE."
             >
@@ -193,9 +193,9 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
             </WorkflowAction>
 
             <WorkflowAction
-              num="2" tool="TPS Monaco" toolColor="bg-blue-100 text-blue-700"
+              num="2" tool={d.machine.tps} toolColor="bg-blue-100 text-blue-700"
               title="Recalage IRMj / IRMref (Reg)"
-              detail="Charger le recalage rigide produit dans Monaco. Il porte les décalages Δx, Δy, Δz — et, en ATP, le décalage de table appliqué."
+              detail={`Charger le recalage rigide produit dans le ${d.machine.tps}. Il porte les décalages Δx, Δy, Δz — et, en ATP, le décalage de table appliqué.`}
               last
             >
               <div className="mt-2">

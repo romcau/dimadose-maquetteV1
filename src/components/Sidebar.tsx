@@ -1,6 +1,7 @@
 import { type PatientRecord } from './Dashboard'
 import { useDossier } from '../store'
-import { etatsMoments, type MomentId } from '../logic'
+import { etatsMoments, imc, lireIMC, type MomentId } from '../logic'
+import { MACHINES } from '../data'
 import { versionCourte, versionDetaillee } from '../version'
 
 export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4'
@@ -45,6 +46,9 @@ export default function Sidebar({
 
   const identite = d.identite(p)
 
+  const valeurIMC = imc(p.tailleCm ?? 0, p.poidsKg ?? 0)
+  const imcPatient = valeurIMC === null ? null : lireIMC(valeurIMC)
+
   // Le dossier patient a avancé, mais le workflow de la séance suivante n'est
   // pas encore ouvert : les deux numéros diffèrent légitimement.
   const seanceTerminee = p.seanceCourante > seance
@@ -58,6 +62,31 @@ export default function Sidebar({
         <div className="text-xs font-mono text-white/40 mt-0.5">{identite.identifiant}</div>
         <div className="text-xs text-white/50 mt-1">{p.protocole}</div>
         <div className="text-xs text-white/40">{p.prescription}</div>
+
+        {/* Machine du dossier, et morphologie quand elle est connue */}
+        <div className="text-xs text-white/40 mt-1 flex items-baseline gap-1.5 flex-wrap">
+          <span>{d.machine.court}</span>
+          {imcPatient && (
+            <>
+              <span className="text-white/20">·</span>
+              <span
+                className={imcPatient.horsPlage ? 'text-warn' : ''}
+                title={`IMC ${imcPatient.valeur.toFixed(1).replace('.', ',')} kg/m² — ${imcPatient.libelle}`
+                  + (imcPatient.horsPlage ? '. Le jumeau numérique peut demander une adaptation.' : '')}
+              >
+                IMC {imcPatient.valeur.toFixed(1).replace('.', ',')}
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Le flux affiché n'est pas celui de la machine : le dire, plutôt que
+            de laisser un relecteur croire qu'il a été conçu pour elle. */}
+        {!d.machine.fluxDefini && (
+          <div className="mt-2 text-[11px] leading-snug bg-warn/15 border border-warn/30 text-warn rounded-xl px-2.5 py-2">
+            Flux {d.machine.court} à définir — les écrans montrent le workflow {MACHINES.unity.court}.
+          </div>
+        )}
 
         {/* §6 : le référentiel de sommation doit être explicite dans l'en-tête du dossier */}
         <div
