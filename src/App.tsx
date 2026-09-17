@@ -198,16 +198,22 @@ function PatientView({
     setPage('step-2')
   }, [d, p.seanceCourante])
 
-  // La fiche patient est en avance sur le dossier : la séance d'après est à
-  // ouvrir. On ne le fait qu'une fois, à l'ouverture du dossier.
+  /**
+   * La fiche patient était déjà en avance à l'ouverture du dossier : la séance
+   * d'après est à ouvrir.
+   *
+   * On compare à l'écart constaté **au montage**, et non à l'écart courant :
+   * finaliser une séance creuse le même écart, et le rattrapage se
+   * déclencherait aussitôt, fermant le rapport qu'on vient d'ouvrir. La séance
+   * suivante s'ouvre en revenant au dossier, pas en le quittant.
+   */
+  const ecartAuMontage = useRef(p.seanceCourante - d.seanceCourante)
   const rattrapageFait = useRef(false)
   useEffect(() => {
-    if (rattrapageFait.current) return
-    if (p.seanceCourante > d.seanceCourante && p.seanceCourante <= p.totalSeances) {
-      rattrapageFait.current = true
-      startNextSession()
-    }
-  }, [p.seanceCourante, p.totalSeances, d.seanceCourante, startNextSession])
+    if (rattrapageFait.current || ecartAuMontage.current <= 0) return
+    rattrapageFait.current = true
+    if (p.seanceCourante <= p.totalSeances) startNextSession()
+  }, [p.seanceCourante, p.totalSeances, startNextSession])
 
   /**
    * La séance vient d'être délivrée : le dossier avance dans la liste patients.
@@ -328,7 +334,8 @@ function PatientView({
     'step-2': validatedSteps.has('step-2') ? 100 : 0,
     'step-3': validatedSteps.has('step-3') ? 100 : 0,
     'step-4': validatedSteps.has('step-4') ? 100 : 0,
-    'step-5': validatedSteps.has('step-5') ? 100 : 0,
+    // L'étape 5 ne se valide pas : elle est faite quand la séance est finalisée.
+    'step-5': workflowDone ? 100 : 0,
   }
 
   const planningDone = validatedSteps.has('step-1') || sessionNum > 1
@@ -540,10 +547,8 @@ function PatientView({
                   finalisee={workflowDone}
                   prochaineSeance={prochaineSeance}
                   onChangerProchaineSeance={changerProchaineSeance}
-                  onFinaliser={() => { validate('step-5'); terminerSeance() }}
-                  onVoirRecap={() => setActiveModal('moment-A')}
-                  onVoirRapport={() => setActiveModal('moment-D')}
-                  onRetourDashboard={onBackToDashboard}
+                  onFinaliser={() => { terminerSeance(); setActiveModal('moment-D') }}
+                  onCloturer={onBackToDashboard}
                   peutSaisir={droits.peutValiderEtape}
                 />
 
@@ -553,15 +558,19 @@ function PatientView({
                   <QualifierSeance seance={sessionNum} peutQualifier={droits.peutValiderEtape} />
                 )}
 
-                <StepValidateBar
-                  validated={validatedSteps.has('step-5')}
-                  seance={sessionNum}
-                  etape="step-5"
-                  onValidate={() => { validate('step-5'); terminerSeance() }}
-                  onUnvalidate={() => { unvalidate('step-5'); setWorkflowDone(false) }}
-                  canValidate={droits.peutValiderEtape}
-                  onBack={revenirEnArriere}
-                />
+                {/* Pas de barre de validation : la séance est délivrée, il n'y a
+                    plus rien à vérifier avant la suite. Seulement le retour. */}
+                <div className="max-w-4xl mx-auto mt-4">
+                  <button
+                    onClick={revenirEnArriere}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Annuler et revenir à l'étape précédente
+                  </button>
+                </div>
               </>
             )}
           </div>
