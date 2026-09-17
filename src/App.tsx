@@ -13,7 +13,6 @@ import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
 import DicomRecap from './components/DicomRecap'
 import QualifierSeance from './components/QualifierSeance'
 import DecisionModal from './components/DecisionModal'
-import CommentaireEtape from './components/CommentaireEtape'
 import CommentairesPrecedents from './components/CommentairesPrecedents'
 import { DossierProvider, useDossier } from './store'
 import { comptesInitiaux, libellesRoles, type Compte, type Role, type Voie } from './data'
@@ -439,13 +438,14 @@ function PatientView({
                 />
                 <StepValidateBar
                   validated={validatedSteps.has('step-1')}
+                  seance={sessionNum}
+                  etape="step-1"
                   onValidate={() => validate('step-1')}
                   onUnvalidate={() => unvalidate('step-1')}
                   nextLabel={stepNextLabel['step-1']}
                   onNext={() => { validate('step-1'); setPage('step-2') }}
                   canValidate={droits.peutValiderEtape}
                 />
-                <CommentaireEtape seance={sessionNum} etape="step-1" modifiable={droits.peutValiderEtape} />
               </>
             )}
 
@@ -458,6 +458,8 @@ function PatientView({
                 />
                 <StepValidateBar
                   validated={validatedSteps.has('step-2')}
+                  seance={sessionNum}
+                  etape="step-2"
                   onValidate={() => validate('step-2')}
                   onUnvalidate={() => unvalidate('step-2')}
                   nextLabel={stepNextLabel['step-2']}
@@ -465,7 +467,6 @@ function PatientView({
                   canValidate={droits.peutValiderEtape}
                   onBack={revenirEnArriere}
                 />
-                <CommentaireEtape seance={sessionNum} etape="step-2" modifiable={droits.peutValiderEtape} />
               </>
             )}
 
@@ -478,6 +479,8 @@ function PatientView({
                 />
                 <StepValidateBar
                   validated={validatedSteps.has('step-3')}
+                  seance={sessionNum}
+                  etape="step-3"
                   onValidate={() => validate('step-3')}
                   onUnvalidate={() => unvalidate('step-3')}
                   nextLabel={stepNextLabel['step-3']}
@@ -485,7 +488,6 @@ function PatientView({
                   canValidate={droits.peutValiderEtape}
                   onBack={revenirEnArriere}
                 />
-                <CommentaireEtape seance={sessionNum} etape="step-3" modifiable={droits.peutValiderEtape} />
               </>
             )}
 
@@ -494,12 +496,13 @@ function PatientView({
                 <StepGating patient={p} sessionNum={sessionNum} peutSaisir={droits.peutValiderEtape} />
                 <StepValidateBar
                   validated={validatedSteps.has('step-4')}
+                  seance={sessionNum}
+                  etape="step-4"
                   onValidate={() => { validate('step-4'); terminerSeance() }}
                   onUnvalidate={() => { unvalidate('step-4'); setWorkflowDone(false) }}
                   canValidate={droits.peutValiderEtape}
                   onBack={revenirEnArriere}
                 />
-                <CommentaireEtape seance={sessionNum} etape="step-4" modifiable={droits.peutValiderEtape} />
 
                 {workflowDone && validatedSteps.has('step-4') && (
                   <QualifierSeance seance={sessionNum} peutQualifier={droits.peutValiderEtape} />
