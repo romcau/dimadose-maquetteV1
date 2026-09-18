@@ -788,7 +788,7 @@ export default function Dashboard({
       {/* ── Top bar ── */}
       <header className="bg-app-sidebar text-white h-16 px-6 flex items-center justify-between shrink-0 border-b border-white/8">
         <div className="flex items-center gap-4 min-w-0">
-          <DimadoseLogo width={160} variant="light" />
+          <DimadoseLogo width={160} variant="light" symbole />
           <div className="w-px h-5 bg-white/10 shrink-0" />
           <div className="min-w-0">
             <div className="text-sm font-semibold text-white/90 leading-tight truncate">

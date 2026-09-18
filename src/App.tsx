@@ -354,7 +354,7 @@ function PatientView({
       {/* ── Header ── */}
       <header className="bg-app-sidebar border-b border-white/5 h-12 flex items-center justify-between px-5 shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <DimadoseLogo width={140} variant="light" />
+          <DimadoseLogo width={140} variant="light" symbole />
           <span className="text-white/20 text-xs">·</span>
           <button
             onClick={onBackToDashboard}

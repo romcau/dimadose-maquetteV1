@@ -123,7 +123,7 @@ export default function LoginScreen({ comptes, onCreerCompte, onLogin }: Props) 
       <div className="relative z-10 w-full max-w-sm">
         {/* Brand block */}
         <div className="flex flex-col items-center mb-8 gap-1">
-          <DimadoseLogo width={320} />
+          <DimadoseLogo width={320} symbole />
         </div>
 
         <div className="bg-white rounded-3xl p-7 border border-violet-100">

@@ -11,6 +11,8 @@
  * `src/index.css`.
  * ──────────────────────────────────────────────────────────────────────────── */
 
+import DimadoseMark from './DimadoseMark'
+
 /** Tracés des lettres. Ne pas éditer à la main : ils viennent du logo vectoriel. */
 const TRACE_DIMA =
   'M75.375 229.5H126C133.833 229.5 140.625 228.667 146.375 227C152.208 225.333 157.042 222.667 160.875 219C164.708 215.333 167.583 210.583 169.5 204.75C171.417 198.917 172.375 191.833 172.375 183.5C172.375 175.417 171.375 168.583 169.375 163C167.458 157.417 164.542 152.875 160.625 149.375C156.792 145.875 151.958 143.375 146.125 141.875C140.375 140.292 133.667 139.5 126 139.5H75.375V229.5ZM23.75 272V97H137C149.917 97 161.75 98.7917 172.5 102.375C183.25 105.958 192.5 111.375 200.25 118.625C208.083 125.875 214.167 135 218.5 146C222.833 156.917 225 169.75 225 184.5C225 200.167 222.667 213.542 218 224.625C213.417 235.708 207.125 244.75 199.125 251.75C191.208 258.75 181.917 263.875 171.25 267.125C160.583 270.375 149.167 272 137 272H23.75ZM262.52 272V97H314.145V272H262.52ZM361.641 272V97H406.641L468.516 187L528.391 97H574.516V272H523.016V173L465.141 259.875L406.141 174.125V272H361.641ZM598.145 272L688.395 97H735.02L825.895 272H765.52L750.02 240.25H668.645L652.395 272H598.145ZM687.27 204.25H733.02L710.645 158.875L687.27 204.25Z'
@@ -21,20 +23,39 @@ const TRACE_DOSE =
 const RAPPORT = 296 / 1737
 
 interface Props {
-  /** Largeur en pixels ; la hauteur suit le rapport du logo. */
+  /** Largeur du wordmark en pixels ; la hauteur suit le rapport du logo. */
   width?: number
   /** `dark` : sur fond clair. `light` : sur fond sombre. */
   variant?: 'dark' | 'light'
+  /**
+   * Afficher le symbole à gauche du wordmark.
+   *
+   * Le logo d'origine les empile ; en bandeau, la hauteur disponible ne le
+   * permet pas, ils se posent donc côte à côte.
+   */
+  symbole?: boolean
   className?: string
 }
 
-export default function DimadoseLogo({ width = 260, variant = 'dark', className = '' }: Props) {
+export default function DimadoseLogo({
+  width = 260, variant = 'dark', symbole = false, className = '',
+}: Props) {
   const encre = variant === 'light' ? 'rgba(255,255,255,0.95)' : 'var(--color-marque-bleu)'
+  const hauteur = Math.ceil(width * RAPPORT)
+
+  if (symbole) {
+    return (
+      <span className={`inline-flex items-center gap-2.5 ${className}`}>
+        <DimadoseMark size={Math.round(hauteur * 1.7)} variant={variant} />
+        <DimadoseLogo width={width} variant={variant} />
+      </span>
+    )
+  }
 
   return (
     <svg
       width={width}
-      height={Math.ceil(width * RAPPORT)}
+      height={hauteur}
       viewBox="0 0 1737 296"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
