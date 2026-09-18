@@ -1,9 +1,10 @@
 import { type PatientRecord } from './Dashboard'
 import { useDossier } from '../store'
-import { etatsMoments, type MomentId } from '../logic'
+import { imc, lireIMC } from '../logic'
+import { MACHINES } from '../data'
 import { versionCourte, versionDetaillee } from '../version'
 
-export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4'
+export type Page = 'step-1' | 'step-2' | 'step-3' | 'step-4' | 'step-5'
 
 interface Props {
   patient: PatientRecord
@@ -11,15 +12,14 @@ interface Props {
   onChange: (p: Page) => void
   validatedSteps: Set<Page>
   onOpenDicom?: () => void
-  /** Ouvre l'un des quatre moments de l'aide à la décision. */
-  onOpenMoment?: (id: MomentId) => void
 }
 
 const workflowSteps: { id: Page; num: string; label: string; sub: string; gating?: boolean }[] = [
   { id: 'step-1', num: '1', label: 'Planning initial',  sub: 'Une seule fois · verrouillé'   },
   { id: 'step-2', num: '2', label: 'IRM du jour',       sub: 'Acquisition · Recalage' },
   { id: 'step-3', num: '3', label: 'Adaptation',        sub: 'ATP / ATS · Cumul dose'  },
-  { id: 'step-4', num: '4', label: 'Gating',            sub: 'Traitement asservi', gating: true },
+  { id: 'step-4', num: '4', label: 'Gating et délivrance', sub: 'Suivi intra-séance', gating: true },
+  { id: 'step-5', num: '5', label: 'Données supplémentaires', sub: 'Post-traitement · clôture' },
 ]
 
 export default function Sidebar({
@@ -28,7 +28,6 @@ export default function Sidebar({
   onChange,
   validatedSteps = new Set(),
   onOpenDicom,
-  onOpenMoment,
 }: Props) {
   const currentIdx  = workflowSteps.findIndex(s => s.id === current)
   const d = useDossier()
@@ -41,7 +40,10 @@ export default function Sidebar({
   // deux restent ainsi d'accord quand on enchaîne sur la séance suivante.
   const seance = d.seanceCourante
 
-  const moments = etatsMoments(d.seances, d.recommandation, seance, p.totalSeances)
+  const identite = d.identite(p)
+
+  const valeurIMC = imc(p.tailleCm ?? 0, p.poidsKg ?? 0)
+  const imcPatient = valeurIMC === null ? null : lireIMC(valeurIMC)
 
   // Le dossier patient a avancé, mais le workflow de la séance suivante n'est
   // pas encore ouvert : les deux numéros diffèrent légitimement.
@@ -52,10 +54,35 @@ export default function Sidebar({
 
       {/* Patient card */}
       <div className="mx-3 mt-3 mb-2 bg-white/8 rounded-2xl p-4 border border-white/8">
-        <div className="font-bold text-white text-sm leading-tight">{p.nom} {p.prenom}</div>
-        <div className="text-xs font-mono text-white/40 mt-0.5">{p.id}</div>
+        <div className="font-bold text-white text-sm leading-tight">{identite.libelle}</div>
+        <div className="text-xs font-mono text-white/40 mt-0.5">{identite.identifiant}</div>
         <div className="text-xs text-white/50 mt-1">{p.protocole}</div>
         <div className="text-xs text-white/40">{p.prescription}</div>
+
+        {/* Machine du dossier, et morphologie quand elle est connue */}
+        <div className="text-xs text-white/40 mt-1 flex items-baseline gap-1.5 flex-wrap">
+          <span>{d.machine.court}</span>
+          {imcPatient && (
+            <>
+              <span className="text-white/20">·</span>
+              <span
+                className={imcPatient.horsPlage ? 'text-warn' : ''}
+                title={`IMC ${imcPatient.valeur.toFixed(1).replace('.', ',')} kg/m² — ${imcPatient.libelle}`
+                  + (imcPatient.horsPlage ? '. Le jumeau numérique peut demander une adaptation.' : '')}
+              >
+                IMC {imcPatient.valeur.toFixed(1).replace('.', ',')}
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Le flux affiché n'est pas celui de la machine : le dire, plutôt que
+            de laisser un relecteur croire qu'il a été conçu pour elle. */}
+        {!d.machine.fluxDefini && (
+          <div className="mt-2 text-[11px] leading-snug bg-warn/15 border border-warn/30 text-warn rounded-xl px-2.5 py-2">
+            Flux {d.machine.court} à définir — les écrans montrent le workflow {MACHINES.unity.court}.
+          </div>
+        )}
 
         {/* §6 : le référentiel de sommation doit être explicite dans l'en-tête du dossier */}
         <div
@@ -72,7 +99,9 @@ export default function Sidebar({
             {Array.from({ length: p.totalSeances }).map((_, i) => (
               <div key={i} className={`flex-1 h-1.5 rounded-full ${
                 i < seance - 1 ? 'bg-ok' :
-                i === seance - 1 ? 'bg-clinical-mid' : 'bg-white/10'
+                // Sur le fond sombre de la barre, le bleu de la marque
+                // disparaîtrait : c'est le bleu clair du logo qui ressort.
+                i === seance - 1 ? 'bg-marque-cyan' : 'bg-white/10'
               }`} />
             ))}
           </div>
@@ -163,47 +192,6 @@ export default function Sidebar({
               </button>
             )
           })}
-        </div>
-      </div>
-
-      {/* ── Les quatre moments ──
-          §3 du brief : quatre instants distincts, pas des onglets. On les situe
-          dans le temps et on dit ce qui s'y joue, pour ne pas tomber dessus par
-          hasard depuis une étape du workflow. */}
-      <div className="px-3 pb-2">
-        <div className="px-2 py-1.5 text-xs font-semibold text-white/30 uppercase tracking-wider mb-1">
-          Aide à la décision
-        </div>
-        <div className="flex flex-col gap-1">
-          {moments.map(m => (
-            <button
-              key={m.id}
-              onClick={() => onOpenMoment?.(m.id)}
-              title={`${m.quand} — ${m.etat}`}
-              className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-white/8 group"
-            >
-              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 transition-colors ${
-                m.niveau === 'warn'
-                  ? 'bg-warn text-white'
-                  : m.niveau === 'ok'
-                    ? 'bg-clinical/25 text-clinical'
-                    : 'bg-white/8 text-white/35'
-              }`}>
-                {m.tag}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-white/75 group-hover:text-white truncate">
-                  {m.label}
-                </div>
-                <div className="text-white/30 truncate" style={{ fontSize: '10px' }}>{m.quand}</div>
-                <div className={`truncate mt-0.5 ${
-                  m.niveau === 'warn' ? 'text-warn' : 'text-white/25'
-                }`} style={{ fontSize: '10px' }}>
-                  {m.etat}
-                </div>
-              </div>
-            </button>
-          ))}
         </div>
       </div>
 

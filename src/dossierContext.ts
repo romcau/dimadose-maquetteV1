@@ -7,7 +7,7 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 import { createContext, useContext } from 'react'
-import type { CritereComparaison, Role, Voie } from './data'
+import type { CritereComparaison, DescriptionMachine, Role, Voie } from './data'
 import type {
   AlerteDossier,
   CandidateDose,
@@ -15,7 +15,11 @@ import type {
   Cumul,
   Decisions,
   Droits,
+  CodeSeance,
   EntreeTrace,
+  IdentiteAffichee,
+  IdentiteDossier,
+  SuiviGating,
   ModeCumul,
   PropositionContrainte,
   Rapport,
@@ -44,12 +48,24 @@ export interface DossierContexte {
   dossierId: string
   utilisateur: Utilisateur
   droits: Droits
+  /** Machine de traitement du dossier : elle nomme l'IRM et le TPS des écrans. */
+  machine: DescriptionMachine
+  /**
+   * Comment nommer un dossier à l'écran, selon les droits de qui regarde.
+   * Passer par là plutôt que d'afficher `nom`, `prenom` ou `id` directement :
+   * c'est ce qui garantit qu'aucun écran n'oublie de masquer l'identité.
+   */
+  identite: (p: IdentiteDossier) => IdentiteAffichee
   seanceCourante: number
   decisions: Decisions
   critere: CritereComparaison
   irmref: string
   /** Valeurs de contraintes éditées à la main, par séance puis par structure. */
   contraintesEditees: Record<number, Record<string, number>>
+  /** Tolérances éditées à la main, même forme. */
+  tolerancesEditees: Record<number, Record<string, number>>
+  /** Tolérance retenue pour une structure (protocole ou saisie). */
+  valeurTolerance: (structureId: string) => number
   /** Journal des actions humaines, en ajout seul, du plus récent au plus ancien. */
   trace: EntreeTrace[]
 
@@ -86,6 +102,18 @@ export interface DossierContexte {
   choisirModeCumul: (numero: number, m: ModeCumul) => void
   choisirDose: (numero: number, d: CandidateDose) => void
   validerSeance: (numero: number) => void
+  /** Observations libres de la séance : recalage, affectation de densité. */
+  noterSeance: (numero: number, champ: 'recalage' | 'densites', texte: string) => void
+  /** Commentaire de fin d'étape, adressé à la séance suivante. */
+  commenterEtape: (numero: number, etape: string, texte: string) => void
+  /** Données facultatives rechargées après une séance ATP. */
+  chargerOptionnelATP: (numero: number, objet: 'rtplan' | 'rtdose' | 'irmv', charge: boolean) => void
+  /** IRM acquise après la séance, facultative. */
+  chargerIrmPostTraitement: (numero: number, charge: boolean) => void
+  /** Ce que l'équipe rapporte de la délivrance : gating, seuil, durée. */
+  enregistrerGating: (numero: number, suivi: Omit<SuiviGating, 'par' | 'horodatage'>) => void
+  /** Qualifie la séance en fin de workflow : code couleur et ce qui s'est passé. */
+  qualifierSeance: (numero: number, code: CodeSeance, commentaire: string) => void
   devaliderSeance: (numero: number) => void
   demanderReacquisition: (numero: number, demandee: boolean) => void
   enregistrerVoie: (numero: number, voie: Voie, motifs?: string[], texte?: string) => void
@@ -93,6 +121,7 @@ export interface DossierContexte {
   setCritere: (c: CritereComparaison) => void
   setIrmref: (id: string) => void
   editerContrainte: (structureId: string, valeur: number) => void
+  editerTolerance: (structureId: string, valeur: number) => void
   reinitialiserContrainte: (structureId: string) => void
   reinitialiserContraintes: () => void
 }

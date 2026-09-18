@@ -1,10 +1,29 @@
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import DicomRecap from './DicomRecap'
+import DimadoseLogo from './DimadoseLogo'
 import SessionRecap from './SessionRecap'
-import { DossierProvider, alertesPourDossier } from '../store'
+import { DossierProvider, alertesPourDossier, verdictsPourDossier } from '../store'
 import { versionCourte, versionDetaillee } from '../version'
-import { libellesRoles, nomAffiche, type Compte, type Role } from '../data'
+import {
+  libellesRoles,
+  MACHINES,
+  MACHINE_PAR_DEFAUT,
+  nomAffiche,
+  type Compte,
+  type Machine,
+  type Role,
+} from '../data'
 import { effacer as effacerDossierEnregistre, effacerListePatients } from '../persistence'
+import {
+  couleursCodeSeance,
+  formatDateCourte,
+  identiteAffichee,
+  imc,
+  libellesCodeSeance,
+  lireIMC,
+  type VerdictSeance,
+} from '../logic'
+import type { Utilisateur } from '../dossierContext'
 
 /**
  * Seul ce dossier possède des mesures par séance : ses alertes sont donc
@@ -38,6 +57,24 @@ export interface PatientRecord {
   physicien: string
   dernierePar?: string
   historique?: { etape: string; par: string; date: string }[]
+  /** Taille en cm et poids en kg. L'IMC s'en déduit, il n'est pas stocké. */
+  tailleCm?: number
+  poidsKg?: number
+  /** Machine de traitement. Absente sur un dossier créé avant le choix. */
+  machine?: Machine
+  /**
+   * Date saisie à la création et ce qu'elle désigne. Une date de simulation ne
+   * dit pas quand aura lieu la première séance : les deux ne se confondent pas.
+   */
+  dateReference?: { type: TypeDate; date: string }
+}
+
+/** Ce que désigne la date saisie à la création d'un dossier. */
+export type TypeDate = 'simulation' | 'premiere-seance'
+
+const libellesTypeDate: Record<TypeDate, string> = {
+  'simulation': 'Date de simulation',
+  'premiere-seance': 'Date de la première séance',
 }
 
 export const patientsDemo: PatientRecord[] = [
@@ -133,6 +170,74 @@ export const patientsDemo: PatientRecord[] = [
   },
 ]
 
+/**
+ * Avancement d'un protocole, une séance par segment.
+ *
+ * La couleur ne dit pas seulement « faite » : elle porte la qualification posée
+ * par l'équipe à la fin de la séance. Une séance passée sans qualification reste
+ * verte — elle s'est déroulée sans que personne signale quoi que ce soit.
+ *
+ * Largeur totale fixe et segments proportionnels : un protocole hypofractionné
+ * (5 fr) et un normofractionné (25 fr) occupent la même place dans la colonne.
+ */
+function BarreSeances({ p }: { p: PatientRecord }) {
+  const verdicts = verdictsPourDossier(p.id)
+  // Une seule infobulle, pilotée par l'état : avec une par segment en
+  // `group-hover`, deux voisines pouvaient s'afficher ensemble et se recouvrir.
+  const [survolee, setSurvolee] = useState<number | null>(null)
+
+  const verdictSurvole = survolee === null ? undefined : verdicts[survolee]
+
+  return (
+    <div
+      className="relative mt-1.5 w-20"
+      onMouseLeave={() => setSurvolee(null)}
+    >
+      <div className={`flex ${p.totalSeances > 10 ? 'gap-px' : 'gap-0.5'}`}>
+        {Array.from({ length: p.totalSeances }).map((_, i) => {
+          const numero = i + 1
+          const verdict: VerdictSeance | undefined = verdicts[numero]
+          const passee = numero < p.seanceCourante
+          const courante = numero === p.seanceCourante && p.statut !== 'planification'
+
+          const couleur = verdict ? couleursCodeSeance[verdict.code].pastille
+            : passee ? 'bg-ok'
+            : courante ? 'bg-clinical'
+            : 'bg-slate-200'
+
+          return (
+            // La barre fait 6 px de haut : la zone sensible est agrandie sans la
+            // faire grossir, sinon le survol serait une épreuve d'adresse.
+            <div
+              key={numero}
+              className="flex-1 py-2 -my-2"
+              onMouseEnter={() => setSurvolee(numero)}
+            >
+              <div className={`h-1.5 rounded-full ${couleur}`} />
+            </div>
+          )
+        })}
+      </div>
+
+      {verdictSurvole && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-30
+            w-56 bg-app-sidebar text-white rounded-xl px-3 py-2 shadow-lg"
+        >
+          <div className="text-xs font-semibold">
+            Séance {survolee} · {libellesCodeSeance[verdictSurvole.code]}
+          </div>
+          {verdictSurvole.commentaire && (
+            <div className="text-xs opacity-80 mt-1 leading-snug">{verdictSurvole.commentaire}</div>
+          )}
+          <div className="text-[10px] opacity-50 mt-1">{verdictSurvole.par}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const actionLabels: Record<PatientRecord['action'], { label: string; style: string }> = {
   'decision-en-seance': { label: 'Décision en séance',  style: 'bg-warn-bg text-warn border border-warn-border' },
   'validation-requise': { label: 'Validation requise',  style: 'bg-clinical-light text-clinical border border-clinical-border' },
@@ -182,7 +287,12 @@ interface AddPatientForm {
   doseGy: string
   /** Nombre de fractions du protocole. Indépendant de la dose. */
   nbFractions: string
-  premiereSeance: string
+  /** Taille en cm et poids en kg — l'IMC en est déduit. */
+  tailleCm: string
+  poidsKg: string
+  typeDate: TypeDate
+  date: string
+  machine: Machine
 }
 
 const emptyForm: AddPatientForm = {
@@ -190,7 +300,17 @@ const emptyForm: AddPatientForm = {
   localisation: localisations[0].label,
   doseGy: localisations[0].doseGy,
   nbFractions: localisations[0].fractions,
-  premiereSeance: '',
+  tailleCm: '',
+  poidsKg: '',
+  typeDate: 'premiere-seance',
+  date: '',
+  machine: MACHINE_PAR_DEFAUT,
+}
+
+/** IMC du formulaire, ou null tant que les deux mesures ne sont pas saisies. */
+function imcDuFormulaire(f: AddPatientForm) {
+  const valeur = imc(parseFloat(f.tailleCm.replace(',', '.')), parseFloat(f.poidsKg.replace(',', '.')))
+  return valeur === null ? null : lireIMC(valeur)
 }
 
 /** Dose par fraction, seule valeur réellement déduite des deux autres. */
@@ -210,7 +330,16 @@ interface Props {
   onSelectPatient: (p: PatientRecord) => void
   userName: string
   userRole: string
+  /** Porté au provider des fenêtres de récap : elles héritent ainsi des droits. */
+  utilisateur: Utilisateur
   readOnly?: boolean
+  /**
+   * Voir qui sont les patients. Faux pour un partenaire extérieur : la liste
+   * affiche alors des codes de dossier, jamais un nom ni une date de naissance.
+   */
+  voitIdentite?: boolean
+  /** Créer ou supprimer un dossier. */
+  peutGererPatients?: boolean
   onLogout: () => void
 }
 
@@ -220,6 +349,8 @@ const roleColors: Record<Role, string> = {
   physicien:    'bg-clinical-light text-clinical border border-clinical-border',
   medecin:      'bg-blue-50 text-blue-700 border border-blue-200',
   manipulateur: 'bg-slate-100 text-slate-600 border border-slate-200',
+  // Violet : extérieur à l'établissement, distinct des trois profils soignants.
+  partenaire:   'bg-violet-50 text-violet-700 border border-violet-200',
 }
 
 
@@ -523,10 +654,18 @@ export default function Dashboard({
   onSelectPatient,
   userName,
   userRole,
+  utilisateur,
   readOnly = false,
+  voitIdentite = true,
+  peutGererPatients = !readOnly,
   onLogout,
 }: Props) {
   const [navPage, setNavPage] = useState<NavPage>('dashboard')
+
+  // L'annuaire du personnel porte des noms et des adresses professionnelles.
+  // Masquer l'identité des patients à un partenaire tout en lui ouvrant la
+  // liste des soignants n'aurait pas de sens : il ne voit que le tableau.
+  const pagesVisibles = voitIdentite ? navItems : navItems.filter(i => i.id === 'dashboard')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'tous' | PatientRecord['statut']>('tous')
   const [showModal, setShowModal] = useState(false)
@@ -538,7 +677,7 @@ export default function Dashboard({
 
   // Le titre de l'en-tête suit la page ouverte : « Tableau de bord » figé était
   // faux dès qu'on allait dans le guide ou la gestion des utilisateurs.
-  const pageCourante = navItems.find(i => i.id === navPage) ?? navItems[0]
+  const pageCourante = pagesVisibles.find(i => i.id === navPage) ?? pagesVisibles[0]
 
   // Comparer aussi le contenu : jouer des séances modifie les dossiers sans
   // toucher à la composition de la liste, et il faut pouvoir revenir au
@@ -606,20 +745,29 @@ export default function Dashboard({
       return
     }
     setFormError('')
+    // Quatre chiffres, comme les dossiers existants (P-2024-0148).
     const nextNum = String(patients.length + 200).padStart(4, '0')
     const seances = fractions
     const prescription = `${form.doseGy.trim()} Gy / ${fractions} fr`
     const newPatient: PatientRecord = {
-      id: `P-2026-0${nextNum}`,
+      id: `P-2026-${nextNum}`,
       nom: form.nom.trim().toUpperCase(),
       prenom: form.prenom.trim(),
-      ddn: form.ddn,
+      // Le champ date rend de l'ISO ; la liste affiche du français, comme les
+      // dossiers existants.
+      ddn: form.ddn ? new Date(form.ddn).toLocaleDateString('fr-FR') : '',
       protocole: form.localisation,
       prescription,
       seanceCourante: 0,
       totalSeances: seances,
       dernierSeanceDate: '—',
-      prochaineSeanceDate: form.premiereSeance || '—',
+      // Une date de simulation ne dit pas quand aura lieu la première séance :
+      // la colonne reste vide plutôt que d'annoncer une séance non planifiée.
+      prochaineSeanceDate: form.typeDate === 'premiere-seance' && form.date ? form.date : '—',
+      tailleCm: parseFloat(form.tailleCm.replace(',', '.')) || undefined,
+      poidsKg: parseFloat(form.poidsKg.replace(',', '.')) || undefined,
+      dateReference: form.date ? { type: form.typeDate, date: form.date } : undefined,
+      machine: form.machine,
       statut: 'planification',
       action: 'planification',
       confiance: null,
@@ -640,16 +788,7 @@ export default function Dashboard({
       {/* ── Top bar ── */}
       <header className="bg-app-sidebar text-white h-16 px-6 flex items-center justify-between shrink-0 border-b border-white/8">
         <div className="flex items-center gap-4 min-w-0">
-          <svg width="160" height="27" viewBox="0 0 1737 296" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="DIMADOSE">
-            <defs>
-              <linearGradient id="db-dose-grad" x1="849" y1="184" x2="1737" y2="184" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#0b6fa8" />
-                <stop offset="100%" stopColor="#04b8c5" />
-              </linearGradient>
-            </defs>
-            <path d="M75.375 229.5H126C133.833 229.5 140.625 228.667 146.375 227C152.208 225.333 157.042 222.667 160.875 219C164.708 215.333 167.583 210.583 169.5 204.75C171.417 198.917 172.375 191.833 172.375 183.5C172.375 175.417 171.375 168.583 169.375 163C167.458 157.417 164.542 152.875 160.625 149.375C156.792 145.875 151.958 143.375 146.125 141.875C140.375 140.292 133.667 139.5 126 139.5H75.375V229.5ZM23.75 272V97H137C149.917 97 161.75 98.7917 172.5 102.375C183.25 105.958 192.5 111.375 200.25 118.625C208.083 125.875 214.167 135 218.5 146C222.833 156.917 225 169.75 225 184.5C225 200.167 222.667 213.542 218 224.625C213.417 235.708 207.125 244.75 199.125 251.75C191.208 258.75 181.917 263.875 171.25 267.125C160.583 270.375 149.167 272 137 272H23.75ZM262.52 272V97H314.145V272H262.52ZM361.641 272V97H406.641L468.516 187L528.391 97H574.516V272H523.016V173L465.141 259.875L406.141 174.125V272H361.641ZM598.145 272L688.395 97H735.02L825.895 272H765.52L750.02 240.25H668.645L652.395 272H598.145ZM687.27 204.25H733.02L710.645 158.875L687.27 204.25Z" fill="rgba(255,255,255,0.92)" />
-            <path d="M901.303 229.5H951.928C959.761 229.5 966.553 228.667 972.303 227C978.136 225.333 982.969 222.667 986.803 219C990.636 215.333 993.511 210.583 995.428 204.75C997.344 198.917 998.303 191.833 998.303 183.5C998.303 175.417 997.303 168.583 995.303 163C993.386 157.417 990.469 152.875 986.553 149.375C982.719 145.875 977.886 143.375 972.053 141.875C966.303 140.292 959.594 139.5 951.928 139.5H901.303V229.5ZM849.678 272V97H962.928C975.844 97 987.678 98.7917 998.428 102.375C1009.18 105.958 1018.43 111.375 1026.18 118.625C1034.01 125.875 1040.09 135 1044.43 146C1048.76 156.917 1050.93 169.75 1050.93 184.5C1050.93 200.167 1048.59 213.542 1043.93 224.625C1039.34 235.708 1033.05 244.75 1025.05 251.75C1017.14 258.75 1007.84 263.875 997.178 267.125C986.511 270.375 975.094 272 962.928 272H849.678ZM1086.17 133.125C1086.17 117.625 1090.47 107.458 1099.05 102.625C1107.72 97.7083 1119.09 95.25 1133.17 95.25H1237.8C1251.97 95.25 1263.38 97.7083 1272.05 102.625C1280.72 107.458 1285.05 117.625 1285.05 133.125V234.375C1285.05 250.458 1280.92 261.042 1272.67 266.125C1264.42 271.208 1252.8 273.75 1237.8 273.75H1133.17C1118.26 273.75 1106.67 271.208 1098.42 266.125C1090.26 260.958 1086.17 250.375 1086.17 234.375V133.125ZM1137.8 140.25V228.75H1233.55V140.25H1137.8ZM1320.27 223.75L1369.52 217.25V234.75H1455.52V203.125H1370.77C1363.6 203.125 1357.1 202.583 1351.27 201.5C1345.43 200.417 1340.52 198.458 1336.52 195.625C1332.52 192.708 1329.43 188.667 1327.27 183.5C1325.1 178.333 1324.02 171.75 1324.02 163.75V133C1324.02 125.083 1325.18 118.708 1327.52 113.875C1329.85 108.958 1333.1 105.125 1337.27 102.375C1341.43 99.5417 1346.39 97.6667 1352.14 96.75C1357.97 95.75 1364.35 95.25 1371.27 95.25H1455.27C1462.27 95.25 1468.64 95.75 1474.39 96.75C1480.14 97.6667 1485.06 99.5 1489.14 102.25C1493.31 105 1496.52 108.833 1498.77 113.75C1501.02 118.583 1502.14 124.917 1502.14 132.75V143.875L1453.02 150.125V134.25H1373.27V164H1457.64C1464.64 164 1471.02 164.5 1476.77 165.5C1482.52 166.417 1487.47 168.25 1491.64 171C1495.81 173.667 1499.02 177.458 1501.27 182.375C1503.52 187.292 1504.64 193.667 1504.64 201.5V234.5C1504.64 250.667 1500.47 261.25 1492.14 266.25C1483.81 271.25 1472.31 273.75 1457.64 273.75H1367.14C1359.97 273.75 1353.47 273.208 1347.64 272.125C1341.81 271.125 1336.85 269.208 1332.77 266.375C1328.77 263.458 1325.68 259.458 1323.52 254.375C1321.35 249.292 1320.27 242.708 1320.27 234.625V223.75ZM1543.28 272V97H1713.91V138.375H1594.91V164H1665.66V202.125H1594.91V230.625H1716.41V272H1543.28Z" fill="url(#db-dose-grad)" />
-          </svg>
+          <DimadoseLogo width={160} variant="light" symbole />
           <div className="w-px h-5 bg-white/10 shrink-0" />
           <div className="min-w-0">
             <div className="text-sm font-semibold text-white/90 leading-tight truncate">
@@ -712,7 +851,7 @@ export default function Dashboard({
           </div>
 
           <div className="flex-1 px-3 flex flex-col gap-1">
-            {navItems.map(item => {
+            {pagesVisibles.map(item => {
               const isCurrent = navPage === item.id
               return (
                 <button
@@ -762,7 +901,9 @@ export default function Dashboard({
 
         {/* ── Main content ── */}
         <div className="flex-1 overflow-y-auto">
-          {navPage === 'utilisateurs' && <UsersPage comptes={comptes} setComptes={setComptes} readOnly={readOnly} />}
+          {navPage === 'utilisateurs' && voitIdentite && (
+            <UsersPage comptes={comptes} setComptes={setComptes} readOnly={readOnly} />
+          )}
           {navPage === 'dashboard'   && (
       <main className="p-6 flex flex-col gap-5">
 
@@ -781,41 +922,6 @@ export default function Dashboard({
             </div>
           ))}
         </div>
-
-        {/* ── Urgences ── */}
-        {urgents.length > 0 && (
-          <div className="bg-warn-bg border border-warn-border rounded-3xl p-4">
-            <div className="text-xs font-semibold text-warn-text uppercase tracking-wider mb-3 px-1">
-              Actions requises maintenant
-            </div>
-            <div className="flex flex-col gap-2">
-              {urgents.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => onSelectPatient(p)}
-                  className="flex items-center justify-between bg-white border border-warn-border rounded-2xl px-4 py-3 hover:bg-warn-bg/50 transition-colors text-left group"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="font-semibold text-slate-800 text-sm">{p.nom} {p.prenom}</span>
-                    <span className="font-mono text-xs text-slate-400">{p.id}</span>
-                    <span className="text-xs text-slate-500">S{p.seanceCourante}/{p.totalSeances} · {p.protocole}</span>
-                    {alertesAffichees(p).slice(0, 1).map((a, i) => (
-                      <span key={i} className="text-xs text-danger-text bg-danger-bg border border-danger-border px-2 py-0.5 rounded-full">{a}</span>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${actionLabels[p.action].style}`}>
-                      {actionLabels[p.action].label}
-                    </span>
-                    <svg className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* ── Liste patients ── */}
         <div className="bg-white rounded-3xl overflow-hidden flex flex-col">
@@ -870,8 +976,11 @@ export default function Dashboard({
                   onClick={() => onSelectPatient(p)}
                 >
                   <td className="px-5 py-3.5">
-                    <div className="font-semibold text-slate-800">{p.nom} {p.prenom}</div>
-                    <div className="font-mono text-xs text-slate-400 mt-0.5">{p.id} · {p.ddn}</div>
+                    <div className="font-semibold text-slate-800">{identiteAffichee(p, voitIdentite).libelle}</div>
+                    <div className="font-mono text-xs text-slate-400 mt-0.5">
+                      {identiteAffichee(p, voitIdentite).identifiant}
+                      {voitIdentite && <> · {p.ddn}</>}
+                    </div>
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="text-slate-700 font-medium text-xs">{p.protocole}</div>
@@ -885,18 +994,7 @@ export default function Dashboard({
                       </span>
                       <span className="font-mono text-xs text-slate-400">/ {p.totalSeances}</span>
                     </div>
-                    {/* Largeur totale fixe, segments proportionnels : un protocole
-                        hypofractionné (5 fr) et un protocole normofractionné (25 fr)
-                        occupent la même place dans la colonne. */}
-                    <div className={`flex mt-1.5 w-20 ${p.totalSeances > 10 ? 'gap-px' : 'gap-0.5'}`}>
-                      {Array.from({ length: p.totalSeances }).map((_, i) => (
-                        <div key={i} className={`flex-1 h-1.5 rounded-full ${
-                          i < p.seanceCourante - 1 ? 'bg-ok' :
-                          i === p.seanceCourante - 1 && p.statut !== 'planification' ? 'bg-clinical' :
-                          'bg-slate-200'
-                        }`} />
-                      ))}
-                    </div>
+                    <BarreSeances p={p} />
                   </td>
                   {/* Étape courante du workflow */}
                   <td className="px-5 py-3.5">
@@ -920,6 +1018,13 @@ export default function Dashboard({
                     <span className={p.prochaineSeanceDate === "Aujourd'hui" ? 'text-warn font-semibold' : 'text-slate-500'}>
                       {p.prochaineSeanceDate}
                     </span>
+                    {/* Aucune séance planifiée, mais la simulation est datée :
+                        la colonne le dit plutôt que de rester un tiret muet. */}
+                    {p.prochaineSeanceDate === '—' && p.dateReference?.type === 'simulation' && (
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        Simulation {formatDateCourte(p.dateReference.date)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statutStyles[p.statut]}`}>
@@ -973,11 +1078,11 @@ export default function Dashboard({
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center justify-end gap-1">
-                      {!readOnly && (
+                      {peutGererPatients && (
                         <button
                           onClick={e => { e.stopPropagation(); setASupprimer(p) }}
-                          title={`Supprimer le dossier de ${p.nom} ${p.prenom}`}
-                          aria-label={`Supprimer le dossier de ${p.nom} ${p.prenom}`}
+                          title={`Supprimer le dossier ${identiteAffichee(p, voitIdentite).libelle}`}
+                          aria-label={`Supprimer le dossier ${identiteAffichee(p, voitIdentite).libelle}`}
                           className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-7 h-7 rounded-xl flex items-center justify-center text-slate-300 hover:text-danger hover:bg-danger-bg transition-all"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -1126,14 +1231,131 @@ export default function Dashboard({
                   </div>
 
 
+                  {/* Machine : le flux de la maquette est celui d'Unity. */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Première séance</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Machine de traitement</label>
+                    <div className="flex gap-2">
+                      {(Object.keys(MACHINES) as Machine[]).map(id => {
+                        const m = MACHINES[id]
+                        const choisie = form.machine === id
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, machine: id }))}
+                            aria-pressed={choisie}
+                            className={`flex-1 text-left px-3 py-2.5 rounded-2xl border transition-colors ${
+                              choisie
+                                ? 'bg-clinical-light border-clinical-border'
+                                : 'bg-white border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className={`block text-xs font-semibold ${choisie ? 'text-clinical' : 'text-slate-600'}`}>
+                              {m.label}
+                            </span>
+                            <span className="block text-[11px] text-slate-400 mt-0.5">
+                              {m.fluxDefini ? m.tps : 'Flux à définir'}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {!MACHINES[form.machine].fluxDefini && (
+                      <div className="mt-2 text-xs bg-warn-bg border border-warn-border text-warn-text rounded-2xl px-4 py-2.5">
+                        Le flux {MACHINES[form.machine].court} n'est pas encore décrit : le dossier
+                        s'ouvrira sur le workflow {MACHINES.unity.court}, signalé comme tel.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Morphologie : taille et poids sont les mesures, l'IMC s'en déduit. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Taille</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          value={form.tailleCm}
+                          onChange={e => setForm(f => ({ ...f, tailleCm: e.target.value }))}
+                          placeholder="175"
+                          className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 pr-10 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">cm</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Poids</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          value={form.poidsKg}
+                          onChange={e => setForm(f => ({ ...f, poidsKg: e.target.value }))}
+                          placeholder="78"
+                          className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 pr-10 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">kg</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* L'IMC est déduit, jamais saisi */}
+                  {(() => {
+                    const lecture = imcDuFormulaire(form)
+                    if (!lecture) {
+                      return (
+                        <div className="-mt-1 text-xs text-slate-400">
+                          Taille et poids donnent l'IMC, qui peut appeler une adaptation du jumeau numérique.
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className={`-mt-1 text-xs rounded-2xl px-4 py-2.5 border ${
+                        lecture.horsPlage
+                          ? 'bg-warn-bg border-warn-border text-warn-text'
+                          : 'bg-slate-50 border-slate-200 text-slate-500'
+                      }`}>
+                        IMC <strong className="font-mono">{lecture.valeur.toFixed(1).replace('.', ',')}</strong>
+                        {' '}kg/m² — {lecture.libelle}.
+                        {lecture.horsPlage && ' Le jumeau numérique demandera probablement une adaptation : à vérifier à la simulation.'}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Ce que la date désigne se choisit : les deux ne se confondent pas. */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Date connue</label>
+                    <div className="flex gap-2 mb-2">
+                      {(Object.keys(libellesTypeDate) as TypeDate[]).map(type => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, typeDate: type }))}
+                          aria-pressed={form.typeDate === type}
+                          className={`flex-1 text-xs font-semibold px-3 py-2 rounded-2xl border transition-colors ${
+                            form.typeDate === type
+                              ? 'bg-clinical-light border-clinical-border text-clinical'
+                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          {libellesTypeDate[type]}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       type="date"
-                      value={form.premiereSeance}
-                      onChange={e => setForm(f => ({ ...f, premiereSeance: e.target.value }))}
+                      value={form.date}
+                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                       className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:border-clinical focus:ring-2 focus:ring-clinical/10 transition-all"
                     />
+                    <div className="text-xs text-slate-400 mt-1.5">
+                      {form.typeDate === 'simulation'
+                        ? "La première séance reste à planifier : le tableau de bord ne l'annoncera pas."
+                        : 'Le tableau de bord annoncera cette date comme prochaine séance.'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1185,9 +1407,9 @@ export default function Dashboard({
               <div className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-0.5">
                 Suppression d'un dossier
               </div>
-              <div className="text-lg font-bold">{aSupprimer.nom} {aSupprimer.prenom}</div>
+              <div className="text-lg font-bold">{identiteAffichee(aSupprimer, voitIdentite).libelle}</div>
               <div className="text-xs opacity-60 mt-0.5 font-mono">
-                {aSupprimer.id} · {aSupprimer.protocole} · S{aSupprimer.seanceCourante}/{aSupprimer.totalSeances}
+                {identiteAffichee(aSupprimer, voitIdentite).identifiant} · {aSupprimer.protocole} · S{aSupprimer.seanceCourante}/{aSupprimer.totalSeances}
               </div>
             </div>
 
@@ -1233,6 +1455,7 @@ export default function Dashboard({
       {dicomPatient && (
         <DossierProvider
           dossierId={dicomPatient.id}
+          utilisateur={utilisateur}
           seanceInitiale={Math.max(dicomPatient.seanceCourante, 1)}
         >
           <DicomRecap patient={dicomPatient} onClose={() => setDicomPatient(null)} />
@@ -1241,7 +1464,11 @@ export default function Dashboard({
 
       {/* ── Récap des séances (étapes + traçabilité) ── */}
       {recapPatient && (
-        <SessionRecap patient={recapPatient} onClose={() => setRecapPatient(null)} />
+        <SessionRecap
+          patient={recapPatient}
+          identite={identiteAffichee(recapPatient, voitIdentite)}
+          onClose={() => setRecapPatient(null)}
+        />
       )}
     </div>
   )

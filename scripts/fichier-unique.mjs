@@ -14,21 +14,50 @@ import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { execSync } from 'node:child_process'
 
+const git = (commande) =>
+  execSync(`git ${commande}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+
 /**
- * Le dépôt porte-t-il des modifications non commitées ?
+ * Comment nommer ce fichier, et faut-il prévenir ?
  *
- * Un fichier produit depuis un dépôt modifié ne correspond à aucun commit : on
- * ne peut pas retrouver le code qu'un relecteur a eu sous les yeux. Ce n'est pas
- * une erreur — c'est normal pour un essai en cours de travail — mais un tel
- * fichier ne doit pas pouvoir se faire passer pour une version livrée, ni
- * écraser celle qui porte le même numéro.
+ * Seul un build pris sur une version étiquetée porte le nom nu de la version.
+ * Tout le reste est un essai, et doit se distinguer — sinon un fichier produit
+ * en cours de travail écrase celui de la version réellement livrée, sous le
+ * même nom, sans rien dire.
+ *
+ * Deux façons de ne pas être une version livrée :
+ *  — le dépôt est modifié : le fichier ne correspond à aucun commit ;
+ *  — le dépôt est propre mais HEAD ne porte pas d'étiquette : le code est
+ *    commité, il n'est pas livré. Le commit suffit alors à le désigner.
  */
-function depotModifie() {
+function nature(version) {
+  let modifie = false
   try {
-    return execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
-      .toString().trim().length > 0
+    modifie = git('status --porcelain').length > 0
   } catch {
-    return false // Pas de git : rien à affirmer, on ne bloque pas.
+    return { suffixe: '', avertissement: '' } // Pas de git : rien à affirmer.
+  }
+
+  if (modifie) {
+    return {
+      suffixe: '-modifie',
+      avertissement: 'Dépôt modifié : ce fichier ne correspond à aucun commit.\n'
+        + '  Bon pour un essai, pas pour une relecture — un retour ne pourrait pas\n'
+        + '  être rattaché à du code. Pour livrer : commitez, puis « npm version ».',
+    }
+  }
+
+  try {
+    git(`describe --exact-match --tags HEAD`)
+    return { suffixe: '', avertissement: '' } // Version étiquetée : c'est une livraison.
+  } catch {
+    const commit = git('rev-parse --short=7 HEAD')
+    return {
+      suffixe: `-${commit}`,
+      avertissement: `Aucune étiquette sur ce commit : v${version} n'est pas livrée ici.\n`
+        + `  Le fichier porte le commit (${commit}) pour ne pas écraser celui de la\n`
+        + `  version livrée. Pour livrer : « npm version » sur main.`,
+    }
   }
 }
 
@@ -43,9 +72,31 @@ const unSeul = (ext) => {
   return readFileSync(join(DIST, 'assets', trouves[0]), 'utf8')
 }
 
+/**
+ * Les images du build restent des fichiers voisins, désignés par leur URL.
+ * Le fichier de relecture doit tenir seul : elles y entrent en base64.
+ */
+const TYPES = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  svg: 'image/svg+xml', webp: 'image/webp', gif: 'image/gif',
+}
+
+function inlinerImages(source) {
+  let sortie = source
+  for (const fichier of actifs) {
+    const type = TYPES[fichier.split('.').pop().toLowerCase()]
+    if (!type) continue
+    const donnees = readFileSync(join(DIST, 'assets', fichier)).toString('base64')
+    const uri = `data:${type};base64,${donnees}`
+    // Vite écrit « /assets/nom.png » ; on traite aussi la forme relative.
+    sortie = sortie.split(`/assets/${fichier}`).join(uri).split(`assets/${fichier}`).join(uri)
+  }
+  return sortie
+}
+
 let html = readFileSync(join(DIST, 'index.html'), 'utf8')
-const css = unSeul('.css')
-const js = unSeul('.js')
+const css = inlinerImages(unSeul('.css'))
+const js = inlinerImages(unSeul('.js'))
 
 // Un « </script> » à l'intérieur du code fermerait la balise qui le contient.
 const js_inline = js.replaceAll('</script>', '<\\/script>')
@@ -58,16 +109,10 @@ if (/(?:src|href)="[^"]*assets\//.test(html)) {
 }
 
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version
-const modifie = depotModifie()
-const sortie = `DIMADOSE-maquette-v${version}${modifie ? '-modifie' : ''}.html`
+const { suffixe, avertissement } = nature(version)
+const sortie = `DIMADOSE-maquette-v${version}${suffixe}.html`
 writeFileSync(sortie, html, 'utf8')
 
 const ko = Math.round(statSync(sortie).size / 1024)
 console.log(`${sortie} — ${ko} ko, autonome, s'ouvre hors ligne.`)
-if (modifie) {
-  console.warn(
-    `\n  Dépôt modifié : ce fichier ne correspond à aucun commit.\n`
-    + `  Bon pour un essai, pas pour une relecture — un retour ne pourrait pas être\n`
-    + `  rattaché à du code. Pour livrer une version : commitez, puis « npm version ».\n`,
-  )
-}
+if (avertissement) console.warn(`\n  ${avertissement}\n`)

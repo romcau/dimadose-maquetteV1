@@ -1,7 +1,10 @@
 import { type PatientRecord } from './Dashboard'
+import type { IdentiteAffichee } from '../logic'
 
 interface Props {
   patient: PatientRecord
+  /** Déjà résolue par l'appelant, selon les droits de qui regarde. */
+  identite: IdentiteAffichee
   onClose: () => void
 }
 
@@ -13,9 +16,9 @@ const stepStyle: Record<StepState, { cls: string; icon: string; label: string }>
   pending: { cls: 'bg-slate-50 text-slate-300 border-slate-200',            icon: '○', label: 'À venir' },
 }
 
-const workflowSteps = ['Planning initial', 'IRM du jour', 'Adaptation', 'Gating']
+const workflowSteps = ['Planning initial', 'IRM du jour', 'Adaptation', 'Gating et délivrance']
 
-export default function SessionRecap({ patient: p, onClose }: Props) {
+export default function SessionRecap({ patient: p, identite, onClose }: Props) {
   const loc = p.protocole
   const done = Math.max(p.seanceCourante, 0)
   const total = p.totalSeances
@@ -46,8 +49,8 @@ export default function SessionRecap({ patient: p, onClose }: Props) {
         <div className="bg-app-sidebar text-white px-6 py-5 flex items-start justify-between shrink-0 sticky top-0 z-10">
           <div>
             <div className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1">Récap des séances</div>
-            <div className="text-lg font-bold">{p.nom} {p.prenom}</div>
-            <div className="text-xs opacity-60 mt-0.5 font-mono">{p.id} · {loc} · {done} / {total} séances</div>
+            <div className="text-lg font-bold">{identite.libelle}</div>
+            <div className="text-xs opacity-60 mt-0.5 font-mono">{identite.identifiant} · {loc} · {done} / {total} séances</div>
           </div>
           <div className="flex items-center gap-2">
             <button

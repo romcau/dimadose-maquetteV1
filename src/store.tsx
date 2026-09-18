@@ -23,7 +23,10 @@ import {
   dossier,
   libellesEtapes,
   libellesRoles,
+  MACHINES,
+  MACHINE_PAR_DEFAUT,
   type CritereComparaison,
+  type Machine,
   type Voie,
 } from './data'
 import {
@@ -32,6 +35,11 @@ import {
   cumuler,
   droits as calculerDroits,
   evaluerSeances,
+  identiteAffichee,
+  verdictIncomplet,
+  suiviGatingIncomplet,
+  libellesDeroulementGating,
+  libellesCodeSeance,
   labelDeformation,
   labelModeCumul,
   labelQualite,
@@ -42,6 +50,10 @@ import {
   type CandidateDose,
   type Decisions,
   type EntreeTrace,
+  type CodeSeance,
+  type VerdictSeance,
+  type SuiviGating,
+  type IdentiteDossier,
   type ModeCumul,
   type VerdictDeformation,
   type VerdictQualite,
@@ -79,16 +91,37 @@ export function alertesPourDossier(dossierId: string, seanceCourante: number) {
   }
 }
 
+/**
+ * Les qualifications de séance d'un dossier, pour le tableau de bord.
+ *
+ * Le tableau de bord vit hors du provider : il lit l'état enregistré, comme
+ * pour les alertes. Un dossier jamais ouvert n'a pas de qualification — la
+ * séance reste alors sans couleur, ce qui est la vérité : personne ne s'est
+ * prononcé.
+ */
+export function verdictsPourDossier(dossierId: string): Record<number, VerdictSeance> {
+  const etat = charger(dossierId)
+  const decisions = etat?.decisions ?? decisionsEnregistrees
+  const verdicts: Record<number, VerdictSeance> = {}
+  for (const [numero, d] of Object.entries(decisions)) {
+    if (d?.verdict) verdicts[Number(numero)] = d.verdict
+  }
+  return verdicts
+}
+
 export function DossierProvider({
   children,
   dossierId = dossier.id,
   utilisateur = utilisateurParDefaut,
+  machine = MACHINE_PAR_DEFAUT,
   seanceInitiale = dossier.seanceCourante,
 }: {
   children: ReactNode
   /** Clé d'enregistrement — un dossier, un état. */
   dossierId?: string
   utilisateur?: Utilisateur
+  /** Machine du dossier ; par défaut celle dont le flux est décrit. */
+  machine?: Machine
   /** Séance sur laquelle ouvrir le dossier (séance du jour). */
   seanceInitiale?: number
 }) {
@@ -101,6 +134,8 @@ export function DossierProvider({
   const [irmref, setIrmrefState] = useState(initial?.irmref ?? REFERENTIEL_PAR_DEFAUT)
   const [contraintesEditees, setContraintesEditees] =
     useState<Record<number, Record<string, number>>>(initial?.contraintesEditees ?? {})
+  const [tolerancesEditees, setTolerancesEditees] =
+    useState<Record<number, Record<string, number>>>(initial?.tolerancesEditees ?? {})
   const [trace, setTrace] = useState<EntreeTrace[]>(initial?.trace ?? [])
   const [enregistreLe, setEnregistreLe] = useState<string | null>(initial?.enregistreLe ?? null)
 
@@ -156,6 +191,13 @@ export function DossierProvider({
 
   const droits = useMemo(() => calculerDroits(utilisateur.role), [utilisateur.role])
 
+  // Lié aux droits une fois pour toutes : un écran ne peut pas se tromper de
+  // second argument, ni oublier de poser la question.
+  const identite = useCallback(
+    (p: IdentiteDossier) => identiteAffichee(p, droits.voitIdentitePatient),
+    [droits.voitIdentitePatient],
+  )
+
   const editions = contraintesEditees[seanceCourante] ?? {}
 
   const valeurContrainte = useCallback(
@@ -176,12 +218,13 @@ export function DossierProvider({
       seanceCourante,
       decisions,
       contraintesEditees,
+      tolerancesEditees,
       critere,
       irmref,
       trace,
     })
     if (horodatage) setEnregistreLe(horodatage)
-  }, [dossierId, seanceCourante, decisions, contraintesEditees, critere, irmref, trace])
+  }, [dossierId, seanceCourante, decisions, contraintesEditees, tolerancesEditees, critere, irmref, trace])
 
   const reinitialiser = useCallback(() => {
     effacer(dossierId)
@@ -286,6 +329,147 @@ export function DossierProvider({
       })
     },
 
+    /**
+     * Qualification de la séance en fin de workflow : un code couleur et ce qui
+     * s'est passé. C'est un acte humain, donc il part au journal — et comme
+     * tout acte, il porte son auteur.
+     */
+    qualifierSeance: (numero: number, code: CodeSeance, commentaire: string) => {
+      const texte = commentaire.trim()
+      if (verdictIncomplet(code, texte)) return
+      patch(numero, {
+        verdict: {
+          code,
+          commentaire: texte,
+          par: utilisateur.nom,
+          horodatage: new Date().toISOString(),
+        },
+      })
+      tracer({
+        categorie: 'validation',
+        seance: numero,
+        libelle: `Séance ${numero} qualifiée « ${libellesCodeSeance[code].toLowerCase()} »`,
+        detail: texte || undefined,
+        // Le rouge et l'orange signalent une séance qui n'a pas suivi le cours
+        // attendu : le journal doit les distinguer d'une séance ordinaire.
+        ecart: code !== 'vert',
+      })
+    },
+
+    /**
+     * Observations libres de la séance : déroulement du recalage, affectation
+     * de densité retenue. Rien ne les calcule — c'est ce qui explique après
+     * coup pourquoi une séance ressemble à ce qu'elle est.
+     *
+     * Tracées à l'enregistrement, pas à chaque frappe : le journal garderait
+     * sinon une entrée par caractère.
+     */
+    noterSeance: (numero: number, champ: 'recalage' | 'densites', texte: string) => {
+      const propre = texte.trim()
+      patch(numero, champ === 'recalage' ? { noteRecalage: propre } : { noteDensites: propre })
+      const quoi = champ === 'recalage' ? 'Déroulement du recalage' : 'Affectation de densité'
+      tracer({
+        categorie: 'note',
+        seance: numero,
+        libelle: propre
+          ? `${quoi} noté pour la séance ${numero}`
+          : `${quoi} effacé pour la séance ${numero}`,
+        detail: propre || undefined,
+      })
+    },
+
+    /**
+     * Données facultatives rechargées après une séance ATP.
+     *
+     * Le RTDose modifié change la nature de la séance : sa dose n'est plus
+     * estimée. Le journal doit donc en garder trace comme d'un acte, pas
+     * comme d'un réglage.
+     */
+    chargerOptionnelATP: (numero: number, objet: 'rtplan' | 'rtdose' | 'irmv', charge: boolean) => {
+      const libelles = {
+        rtplan: 'RTPj modifié',
+        rtdose: 'RTDosej modifié',
+        irmv: 'IRM de vérification',
+      } as const
+      patch(numero, {
+        atpOptionnel: { ...decisions[numero]?.atpOptionnel, [objet]: charge },
+      })
+      tracer({
+        categorie: 'dose',
+        seance: numero,
+        libelle: charge
+          ? `${libelles[objet]} chargé pour la séance ${numero} (ATP)`
+          : `${libelles[objet]} retiré de la séance ${numero}`,
+        detail: objet === 'rtdose' && charge
+          ? "La dose de la séance n'est plus estimée : elle vient du plan délivré."
+          : undefined,
+      })
+    },
+
+    /**
+     * Ce que l'équipe rapporte de la délivrance : déroulement de
+     * l'asservissement, seuil appliqué, durée. Rien de cela n'est exporté par
+     * la machine — c'est la seule trace qu'il en reste, donc elle part au
+     * journal.
+     */
+    enregistrerGating: (numero: number, suivi: Omit<SuiviGating, 'par' | 'horodatage'>) => {
+      if (suiviGatingIncomplet(suivi.deroulement, suivi.commentaire)) return
+      patch(numero, {
+        gating: { ...suivi, commentaire: suivi.commentaire.trim(), par: utilisateur.nom, horodatage: new Date().toISOString() },
+      })
+      const details = [
+        suivi.commentaire.trim(),
+        suivi.dureeMinutes !== null ? `Durée ${suivi.dureeMinutes} min` : null,
+        suivi.seuilAdapte ? `Seuil adapté : ${suivi.seuilApplique || 'non précisé'}` : null,
+      ].filter(Boolean).join(' · ')
+      tracer({
+        categorie: 'seance',
+        seance: numero,
+        libelle: `Délivrance séance ${numero} — ${libellesDeroulementGating[suivi.deroulement].toLowerCase()}`,
+        detail: details || undefined,
+        // Un ajustement du seuil ou de gros ajustements sortent du cours prévu.
+        ecart: suivi.deroulement !== 'ras' || suivi.seuilAdapte,
+      })
+    },
+
+    /**
+     * Commentaire de fin d'étape, adressé à la séance suivante.
+     *
+     * Tracé comme une observation : il n'engage aucune dose, mais il explique
+     * ce que les chiffres ne disent pas.
+     */
+    commenterEtape: (numero: number, etape: string, texte: string) => {
+      const propre = texte.trim()
+      patch(numero, {
+        commentairesEtape: { ...decisions[numero]?.commentairesEtape, [etape]: propre },
+      })
+      const nom = libellesEtapes[etape] ?? etape
+      tracer({
+        categorie: 'note',
+        seance: numero,
+        libelle: propre
+          ? `Commentaire laissé sur l'étape ${nom} (séance ${numero})`
+          : `Commentaire retiré de l'étape ${nom} (séance ${numero})`,
+        detail: propre || undefined,
+      })
+    },
+
+    /**
+     * IRM post-traitement : acquise après la délivrance, jamais exigée.
+     * Elle ne nourrit aucun calcul de la maquette ; sa présence est notée
+     * pour que le dossier dise qu'elle existe.
+     */
+    chargerIrmPostTraitement: (numero: number, charge: boolean) => {
+      patch(numero, { irmPostTraitement: charge })
+      tracer({
+        categorie: 'dose',
+        seance: numero,
+        libelle: charge
+          ? `IRM post-traitement chargée pour la séance ${numero}`
+          : `IRM post-traitement retirée de la séance ${numero}`,
+      })
+    },
+
     devaliderSeance: (numero: number) => {
       patch(numero, { validee: false })
       tracer({
@@ -357,7 +541,7 @@ export function DossierProvider({
           + labelReferentiel(id),
       })
     },
-  }), [patch, tracer, seance, recommandation, seanceCourante])
+  }), [patch, tracer, seance, recommandation, seanceCourante, utilisateur.nom, decisions])
 
   const editerContrainte = useCallback((structureId: string, valeurSaisie: number) => {
     setContraintesEditees(prev => ({
@@ -376,6 +560,38 @@ export function DossierProvider({
       ecart: Math.abs(valeurSaisie - p.valeurProposee) > 1e-9,
     })
   }, [seanceCourante, propositions, tracer])
+
+  /**
+   * Tolérance admise sur une contrainte, pour la séance en cours.
+   *
+   * Elle vient du protocole et reste ajustable : c'est une convention
+   * d'équipe, pas une constante physique. La modifier change la lecture du
+   * score, jamais la dose — d'où un rang de simple réglage au journal.
+   */
+  const editerTolerance = useCallback((structureId: string, valeurSaisie: number) => {
+    setTolerancesEditees(prev => ({
+      ...prev,
+      [seanceCourante]: { ...prev[seanceCourante], [structureId]: valeurSaisie },
+    }))
+    const p = propositions.find(x => x.id === structureId)
+    if (!p) return
+    tracer({
+      categorie: 'contrainte',
+      seance: seanceCourante,
+      libelle: `Tolérance ${p.structure.nom} ${p.structure.metrique} fixée à `
+        + `${virgule(valeurSaisie)} ${p.structure.unite}`,
+      detail: `Tolérance du protocole : ${virgule(p.structure.toleranceRef)} ${p.structure.unite} par séance`,
+      ecart: Math.abs(valeurSaisie - p.structure.toleranceRef) > 1e-9,
+    })
+  }, [seanceCourante, propositions, tracer])
+
+  const valeurTolerance = useCallback(
+    (structureId: string) =>
+      tolerancesEditees[seanceCourante]?.[structureId]
+      ?? propositions.find(p => p.id === structureId)?.structure.toleranceRef
+      ?? 0,
+    [tolerancesEditees, seanceCourante, propositions],
+  )
 
   const reinitialiserContrainte = useCallback((structureId: string) => {
     setContraintesEditees(prev => {
@@ -406,11 +622,15 @@ export function DossierProvider({
     dossierId,
     utilisateur,
     droits,
+    machine: MACHINES[machine],
+    identite,
     seanceCourante,
     decisions,
     critere,
     irmref,
     contraintesEditees,
+    tolerancesEditees,
+    valeurTolerance,
     trace,
 
     seances,
@@ -432,14 +652,15 @@ export function DossierProvider({
     tracer,
     ...actions,
     editerContrainte,
+    editerTolerance,
     reinitialiserContrainte,
     reinitialiserContraintes,
   }), [
-    dossierId, utilisateur, droits, seanceCourante, decisions, critere, irmref,
-    contraintesEditees, trace, seances, seance, cumul, cumulJusqua, recommandation,
+    dossierId, utilisateur, droits, machine, identite, seanceCourante, decisions, critere, irmref,
+    contraintesEditees, tolerancesEditees, valeurTolerance, trace, seances, seance, cumul, cumulJusqua, recommandation,
     propositions, valeurContrainte, contraintesModifiees, rapport, alertes,
     persistant, enregistreLe, reinitialiser, tracer, actions,
-    editerContrainte, reinitialiserContrainte, reinitialiserContraintes,
+    editerContrainte, editerTolerance, reinitialiserContrainte, reinitialiserContraintes,
   ])
 
   return <Contexte.Provider value={valeur}>{children}</Contexte.Provider>

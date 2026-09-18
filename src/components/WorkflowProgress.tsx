@@ -4,7 +4,7 @@ import { type Page } from './Sidebar'
 interface Props {
   current: Page
   onChange: (p: Page) => void
-  completions: Record<'step-1' | 'step-2' | 'step-3' | 'step-4', number>
+  completions: Record<'step-1' | 'step-2' | 'step-3' | 'step-4' | 'step-5', number>
   collapsed?: Set<string>
   onOpenDicom?: () => void
   sessionNum?: number
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const steps: {
-  id: 'step-1' | 'step-2' | 'step-3' | 'step-4'
+  id: 'step-1' | 'step-2' | 'step-3' | 'step-4' | 'step-5'
   label: string
   sub: string
   headerColor: string
@@ -45,11 +45,19 @@ const steps: {
   },
   {
     id: 'step-4',
-    label: '4. Gating',
+    label: '4. Gating et délivrance',
     sub: 'Traitement asservi',
     headerColor: 'bg-gating',
     fillColor: 'bg-gating',
     textColor: 'text-gating',
+  },
+  {
+    id: 'step-5',
+    label: '5. Données supplémentaires',
+    sub: 'Post-traitement · clôture',
+    headerColor: 'bg-app-sidebar',
+    fillColor: 'bg-app-sidebar',
+    textColor: 'text-app-sidebar',
   },
 ]
 
