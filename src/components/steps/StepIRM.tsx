@@ -83,12 +83,6 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
       <div className="bg-white rounded-3xl overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
           <div className="text-sm font-bold text-slate-800">IRM de référence (IRMref)</div>
-          <div className="text-xs text-slate-400 mt-0.5">
-            Référentiel unique de toutes les sommations. Il doit rester le même d'une séance à
-            l'autre sur l'ensemble du protocole : c'est ce qui évite que les sommations chaînent
-            les erreurs de recalage. En changer reste possible, mais impose de recalculer les
-            sommations déjà faites.
-          </div>
         </div>
         <div className="p-4">
           {premiereSeance ? (
@@ -150,12 +144,6 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
                   </div>
                 </div>
               )}
-
-              <p className="text-xs text-slate-400 mt-2">
-                Le référentiel est un paramètre affiché, pas une constante : si l'étape de
-                planification préalable disparaît, la première séance devient la référence.
-                <span className="text-clinical"> [point non arrêté]</span>
-              </p>
             </>
           )}
         </div>
