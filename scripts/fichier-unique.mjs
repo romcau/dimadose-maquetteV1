@@ -72,9 +72,31 @@ const unSeul = (ext) => {
   return readFileSync(join(DIST, 'assets', trouves[0]), 'utf8')
 }
 
+/**
+ * Les images du build restent des fichiers voisins, désignés par leur URL.
+ * Le fichier de relecture doit tenir seul : elles y entrent en base64.
+ */
+const TYPES = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  svg: 'image/svg+xml', webp: 'image/webp', gif: 'image/gif',
+}
+
+function inlinerImages(source) {
+  let sortie = source
+  for (const fichier of actifs) {
+    const type = TYPES[fichier.split('.').pop().toLowerCase()]
+    if (!type) continue
+    const donnees = readFileSync(join(DIST, 'assets', fichier)).toString('base64')
+    const uri = `data:${type};base64,${donnees}`
+    // Vite écrit « /assets/nom.png » ; on traite aussi la forme relative.
+    sortie = sortie.split(`/assets/${fichier}`).join(uri).split(`assets/${fichier}`).join(uri)
+  }
+  return sortie
+}
+
 let html = readFileSync(join(DIST, 'index.html'), 'utf8')
-const css = unSeul('.css')
-const js = unSeul('.js')
+const css = inlinerImages(unSeul('.css'))
+const js = inlinerImages(unSeul('.js'))
 
 // Un « </script> » à l'intérieur du code fermerait la balise qui le contient.
 const js_inline = js.replaceAll('</script>', '<\\/script>')

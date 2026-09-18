@@ -15,17 +15,17 @@
    * la couleur dit s'il faut regarder quelque chose, un orange décoratif se
    * lirait comme une alerte. Il reste au logo.
    */
-  --color-marque-bleu: #1b5c8e;
-  --color-marque-orange: #f7941e;
-  --color-marque-cyan: #66c2e5;
+  --color-marque-bleu: #095386;
+  --color-marque-orange: #f5951c;
+  --color-marque-cyan: #6ecbe8;
 
-  /* Couleurs du workflow clinique — dérivées du bleu de la marque.
-   * Contraste sur blanc : 7,08:1 (WCAG AA et AAA pour du texte). Le turquoise
+  /* Couleurs du workflow clinique — relevées dans le fichier du logo.
+   * Contraste sur blanc : 8,12:1 (WCAG AA et AAA pour du texte). Le turquoise
    * précédent plafonnait à 2,42:1, sous le minimum de 4,5:1. */
-  --color-clinical: #1b5c8e;
-  --color-clinical-mid: #134470;
-  --color-clinical-light: #eaf3fa;
-  --color-clinical-border: #b6d6ec;
+  --color-clinical: #095386;
+  --color-clinical-mid: #063d63;
+  --color-clinical-light: #e8f0f7;
+  --color-clinical-border: #aecbe1;
 
   --color-gating: #b34728;
   --color-gating-light: #fde8dc;
@@ -33,7 +33,7 @@
 
   /* App background */
   --color-app-bg: #eef4f9;
-  --color-app-sidebar: #0b2740;
+  --color-app-sidebar: #06253c;
 
   /* Status semantics */
   --color-ok: #16a34a;
