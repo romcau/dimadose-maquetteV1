@@ -158,7 +158,14 @@ export function verdictIncomplet(code: CodeSeance, commentaire: string): string 
 export interface Droits {
   /** Valider une étape du workflow. */
   peutValiderEtape: boolean
-  /** Trancher entre ATP et ATS — réservé au radiothérapeute (§2 du brief). */
+  /**
+   * Trancher entre ATP et ATS.
+   *
+   * Ouvert à tous les profils : la décision est un passage obligé du workflow,
+   * et nul ne doit pouvoir l'esquiver faute de droit. Le §2 du brief la
+   * réserve au radiothérapeute — le journal nomme donc qui a tranché, ce qui
+   * permettra de resserrer plus tard sans rien perdre de l'historique.
+   */
   peutDeciderVoie: boolean
   /** Réviser un verdict et valider le cumul d'une séance — travail du physicien. */
   peutEvaluerSeance: boolean
@@ -181,7 +188,7 @@ export function droits(role: Role): Droits {
   const lectureSeule = role === 'manipulateur' || role === 'partenaire'
   return {
     peutValiderEtape: role === 'physicien' || role === 'medecin',
-    peutDeciderVoie: role === 'medecin',
+    peutDeciderVoie: true,
     peutEvaluerSeance: role === 'physicien',
     peutCharger: !lectureSeule,
     lectureSeule,

@@ -116,8 +116,8 @@ export const libellesRoles: Record<Role, string> = {
 
 export const sousTitresRoles: Record<Role, string> = {
   physicien: 'Valide les étapes, révise les verdicts, enregistre le cumul',
-  medecin: 'Valide les étapes et tranche la décision ATP / ATS',
-  manipulateur: 'Consultation en lecture seule',
+  medecin: 'Valide les étapes, tranche la décision ATP / ATS',
+  manipulateur: 'Consultation, et décision ATP / ATS',
   partenaire: 'Consultation seule, dossiers pseudonymisés',
 }
 

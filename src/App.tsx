@@ -286,13 +286,13 @@ function PatientView({
    * l'évitaient.
    */
   /**
-   * La barrière ne vaut que pour qui peut trancher.
+   * La décision est exigée de tous.
    *
-   * Un physicien ou un manipulateur ne décide pas de la voie (§2 du brief) :
-   * la leur opposer les empêcherait d'ouvrir l'adaptation, y compris sur une
-   * séance déjà décidée. Ils y accèdent librement et lisent la décision prise.
+   * Elle a été ouverte à tous les profils : c'est elle qui dit ce que l'étape
+   * suivante fera, et nul ne doit pouvoir l'esquiver faute de droit. Le
+   * journal nomme qui a tranché.
    */
-  const decisionRequise = droits.peutDeciderVoie && !decisionVue
+  const decisionRequise = !decisionVue
 
   const ORDRE: Page[] = ['step-1', 'step-2', 'step-3', 'step-4', 'step-5']
 
