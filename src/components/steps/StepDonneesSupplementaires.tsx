@@ -14,8 +14,8 @@
  * vérifier avant de passer à la suite. Il reste à l'enregistrer et à partir.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-import { useEffect, useState } from 'react'
 import { DataUploadZone, type DicomEntry } from '../DataUploadZone'
+import { ChampCommentaire, useCommentaireEtape } from '../commentaireEtape'
 import { formatDateCourte } from '../../logic'
 import { useDossier } from '../../store'
 
@@ -46,16 +46,9 @@ export default function StepDonneesSupplementaires({
   const chargee = d.decisions[sessionNum]?.irmPostTraitement === true
   const derniereSeance = sessionNum >= totalSeances
 
-  // Le commentaire n'est plus porté par une barre de validation : il vit ici,
-  // au moment où l'on quitte la séance pour la suivante.
-  const enregistre = d.decisions[sessionNum]?.commentairesEtape?.['step-5'] ?? ''
-  const [commentaire, setCommentaire] = useState(enregistre)
-  const [ouvert, setOuvert] = useState(enregistre.length > 0)
-  useEffect(() => {
-    setCommentaire(enregistre)
-    setOuvert(enregistre.length > 0)
-  }, [enregistre, sessionNum])
-  const commentaireModifie = commentaire.trim() !== enregistre
+  // L'étape 5 n'a pas de barre de validation : le commentaire vit ici, et
+  // « Finaliser » l'enregistre comme « Valider l'étape » le fait ailleurs.
+  const commentaire = useCommentaireEtape(sessionNum, 'step-5')
 
   const fichiers: DicomEntry[] = [
     {
@@ -117,33 +110,8 @@ export default function StepDonneesSupplementaires({
           {/* Le commentaire se laisse avant de finaliser : c'est au moment où
               l'on ferme la séance qu'on sait ce qu'il faut en dire. Finaliser
               l'enregistre avec le reste. */}
-          {peutSaisir && !finalisee && (
-            <div>
-              {!ouvert ? (
-                <button
-                  type="button"
-                  onClick={() => setOuvert(true)}
-                  className="text-xs text-slate-400 hover:text-clinical transition-colors"
-                >
-                  + Ajouter un commentaire pour la séance suivante (facultatif)
-                </button>
-              ) : (
-                <>
-                  <div className="text-xs font-semibold text-slate-500">
-                    Commentaire pour la séance suivante
-                    <span className="font-normal text-slate-400"> — facultatif, repris au rapport</span>
-                  </div>
-                  <textarea
-                    value={commentaire}
-                    onChange={e => setCommentaire(e.target.value)}
-                    rows={2}
-                    placeholder="Ce qu'il faut savoir avant la prochaine séance…"
-                    className="mt-1.5 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
-                      focus:outline-none focus:border-clinical"
-                  />
-                </>
-              )}
-            </div>
+          {!finalisee && (
+            <ChampCommentaire champ={commentaire} modifiable={peutSaisir} />
           )}
 
           {/* Les trois gestes de la clôture, dans l'ordre. Les deux derniers
@@ -152,7 +120,7 @@ export default function StepDonneesSupplementaires({
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={() => {
-                if (commentaireModifie) d.commenterEtape(sessionNum, 'step-5', commentaire)
+                if (commentaire.modifie) commentaire.enregistrer()
                 onFinaliser()
               }}
               disabled={!peutSaisir || finalisee}
@@ -223,30 +191,13 @@ export default function StepDonneesSupplementaires({
                 </label>
               )}
 
-              {peutSaisir && (commentaire || enregistre) && (
-                <div className="border-t border-slate-100 pt-4">
-                  <div className="text-xs font-semibold text-slate-500">
-                    Commentaire pour la séance suivante
-                    <span className="font-normal text-slate-400"> — repris au rapport</span>
-                  </div>
-                  <textarea
-                    value={commentaire}
-                    onChange={e => setCommentaire(e.target.value)}
-                    rows={2}
-                    className="mt-1.5 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
-                      focus:outline-none focus:border-clinical"
-                  />
-                  {commentaireModifie && (
-                    <button
-                      type="button"
-                      onClick={() => d.commenterEtape(sessionNum, 'step-5', commentaire)}
-                      className="mt-2 text-xs px-3 py-1.5 bg-clinical hover:bg-clinical-mid text-white
-                        rounded-xl font-semibold transition-colors"
-                    >
-                      Enregistrer le commentaire
-                    </button>
-                  )}
-                </div>
+              {commentaire.enregistre && (
+                <ChampCommentaire
+                  champ={commentaire}
+                  modifiable={peutSaisir}
+                  avecBouton
+                  className="border-t border-slate-100 pt-4"
+                />
               )}
 
               {/* Rien à annoncer entre deux séances : la séance est close. */}

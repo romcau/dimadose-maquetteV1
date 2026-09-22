@@ -3,9 +3,9 @@
  *
  * Un seul endroit détient les décisions de l'utilisateur ; tout le reste est
  * recalculé à partir d'elles par `logic.ts`. C'est ce qui fait qu'un choix pris
- * au moment A (exclure une séance, retenir la dose IRM plutôt que sCT, réviser
- * un verdict) change réellement la recommandation du moment B, le tableau de
- * contraintes du moment C et le rapport du moment D.
+ * dans les écrans (exclure une séance, retenir la dose IRM plutôt que sCT, réviser
+ * un verdict) change réellement la recommandation ATP/ATS, le tableau de
+ * contraintes de l'adaptation et le rapport de traitement.
  *
  * Chaque action humaine est inscrite dans un journal en ajout seul, et
  * l'ensemble est enregistré dans le navigateur : une revue interrompue reprend

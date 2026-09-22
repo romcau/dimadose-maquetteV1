@@ -9,7 +9,7 @@ import StepIRM from './components/steps/StepIRM'
 import StepAdaptation from './components/steps/StepAdaptation'
 import StepGating from './components/steps/StepGating'
 import StepValidateBar from './components/StepValidateBar'
-import DimadoseDrawer, { type MomentId } from './components/DimadoseDrawer'
+import RapportModal from './components/RapportModal'
 import DicomRecap from './components/DicomRecap'
 import QualifierSeance from './components/QualifierSeance'
 import StepDonneesSupplementaires from './components/steps/StepDonneesSupplementaires'
@@ -30,7 +30,7 @@ interface User { name: string; role: Role }
 
 const defaultPage: Record<PatientRecord['action'], Page> = {
   'decision-en-seance': 'step-2',
-  'validation-requise':  'step-2',
+  'seance-a-venir':  'step-2',
   'rapport-disponible':  'step-3',
   'planification':       'step-1',
   'aucune':              'step-2',
@@ -155,7 +155,7 @@ function PatientView({
   const [page, setPage] = useState<Page>(pageInitiale)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [validatedSteps, setValidatedSteps] = useState<Set<Page>>(new Set())
-  const [activeModal, setActiveModal] = useState<MomentId | null>(null)
+  const [rapportOuvert, setRapportOuvert] = useState(false)
   const [decisionModalOpen, setDecisionModalOpen] = useState(false)
   /**
    * La décision a été vue pour la séance en cours.
@@ -202,7 +202,7 @@ function PatientView({
     setDecisionVue(false)
     setValidatedSteps(new Set(['step-1']))
     setWorkflowDone(false)
-    setActiveModal(null)
+    setRapportOuvert(false)
     setPage('step-2')
   }, [d, p.seanceCourante])
 
@@ -306,7 +306,10 @@ function PatientView({
     const i = ORDRE.indexOf(page)
     if (i <= 0) return
     unvalidate(page)
-    if (page === 'step-3') setWorkflowDone(false)
+    // Quitter l'adaptation vers l'arrière, c'est revenir sur la décision qui
+    // l'avait ouverte : elle se repose au retour, avec la voie déjà retenue
+    // proposée à la confirmation.
+    if (page === 'step-3') { setWorkflowDone(false); setDecisionVue(false) }
     setPage(ORDRE[i - 1])
   }
 
@@ -418,7 +421,7 @@ function PatientView({
                   <div className="text-xs text-slate-400 mt-0.5">{libellesRoles[user.role]}</div>
                 </div>
                 <button
-                  onClick={() => { setUserMenuOpen(false); setActiveModal('moment-D') }}
+                  onClick={() => { setUserMenuOpen(false); setRapportOuvert(true) }}
                   className="w-full text-left px-3 py-2 text-xs text-slate-500 hover:text-clinical hover:bg-clinical-light transition-colors"
                 >
                   Journal de traçabilité ({d.trace.length})
@@ -490,7 +493,7 @@ function PatientView({
                 <StepIRM
                   canDecide={droits.peutDeciderVoie}
                   canUpload={droits.peutCharger}
-                  onGoToDecision={() => setActiveModal('moment-B')}
+                  onGoToDecision={() => setDecisionModalOpen(true)}
                 />
                 <StepValidateBar
                   validated={validatedSteps.has('step-2')}
@@ -510,7 +513,7 @@ function PatientView({
               <>
                 <StepAdaptation
                   canUpload={droits.peutCharger}
-                  onGoToReport={() => setActiveModal('moment-D')}
+                  onGoToReport={() => setRapportOuvert(true)}
                 />
                 <StepValidateBar
                   validated={validatedSteps.has('step-3')}
@@ -554,7 +557,7 @@ function PatientView({
                   prochaineSeance={prochaineSeance}
                   onChangerProchaineSeance={changerProchaineSeance}
                   onFinaliser={() => setQualificationOuverte(true)}
-                  onConsulterRapport={() => setActiveModal('moment-D')}
+                  onConsulterRapport={() => setRapportOuvert(true)}
                   onCloturer={onBackToDashboard}
                   peutSaisir={droits.peutValiderEtape}
                 />
@@ -579,11 +582,7 @@ function PatientView({
       </div>
 
       {/* ── Tiroir DIMADOSE ── */}
-      <DimadoseDrawer
-        open={activeModal}
-        onClose={() => setActiveModal(null)}
-        onAtsConfirmed={() => setActiveModal('moment-C')}
-      />
+      <RapportModal ouvert={rapportOuvert} onFermer={() => setRapportOuvert(false)} />
 
       {/* ── Dossier DICOM ── */}
       {dicomOpen && <DicomRecap patient={p} onClose={() => setDicomOpen(false)} />}
@@ -615,7 +614,7 @@ function PatientView({
                     d.reinitialiser()
                     setValidatedSteps(new Set())
                     setWorkflowDone(false)
-                    setActiveModal(null)
+                    setRapportOuvert(false)
                     setPage('step-2')
                     setResetOpen(false)
                   }}
@@ -653,7 +652,6 @@ function PatientView({
           decisionEnregistree={decision}
           peutDecider={droits.peutDeciderVoie}
           onChoisir={confirmDecision}
-          onVoirAnalyse={() => { setDecisionModalOpen(false); setActiveModal('moment-B') }}
           onFermer={() => setDecisionModalOpen(false)}
         />
       )}

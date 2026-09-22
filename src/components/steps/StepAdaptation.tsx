@@ -2,6 +2,7 @@ import { DataUploadZone, type DicomEntry } from '../DataUploadZone'
 import { dossier, formatNombre } from '../../data'
 import {
   comparerAuPlanReference,
+  exporterContraintes,
   fmt,
   scorerContrainte,
   scoreGlobal,
@@ -10,6 +11,7 @@ import {
   labelDirection,
   SEUIL_ECART_PLAN_PCT,
 } from '../../logic'
+import { useState } from 'react'
 import { useDossier } from '../../store'
 
 interface Props {
@@ -61,6 +63,31 @@ export default function StepAdaptation({ canUpload, onGoToReport }: Props) {
 
   // Contraintes effectivement retenues pour la séance (proposition ou saisie manuelle)
   const contraintes = d.propositions.filter(p => p.structure.type === 'oar')
+
+  /**
+   * Copie du jeu de contraintes.
+   *
+   * Aucun échange automatique avec le TPS : le physicien recopie ces valeurs à
+   * la main. Les lui faire relire à l'écran ligne à ligne est la façon la plus
+   * sûre de se tromper — le presse-papiers évite la saisie deux fois.
+   */
+  const [copie, setCopie] = useState(false)
+  const copierContraintes = async () => {
+    const texte = exporterContraintes(
+      contraintes,
+      Object.fromEntries(contraintes.map(p => [p.id, d.valeurContrainte(p.id)])),
+      [`DIMADOSE — contraintes retenues, séance ${n}`, `Cumul S1–S${d.cumul.jusqua}`],
+    )
+    try {
+      await navigator.clipboard.writeText(texte)
+      setCopie(true)
+      setTimeout(() => setCopie(false), 2500)
+      d.tracerExport('Jeu de contraintes', `Séance ${n} · ${contraintes.length} structures`)
+    } catch {
+      // Presse-papiers refusé (contexte non sécurisé) : on ne prétend pas avoir copié.
+      setCopie(false)
+    }
+  }
 
   // Le score compare la projection de fin de traitement à l'objectif : il lui
   // faut donc la durée du protocole, pas seulement la séance du jour.
@@ -250,7 +277,7 @@ export default function StepAdaptation({ canUpload, onGoToReport }: Props) {
           />
 
           <div className="bg-white rounded-3xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm font-bold text-slate-800">
                   Contraintes retenues pour la séance {n}
@@ -260,6 +287,13 @@ export default function StepAdaptation({ canUpload, onGoToReport }: Props) {
                   {d.contraintesModifiees && ' · valeurs ajustées à la main'}
                 </div>
               </div>
+              <button
+                onClick={copierContraintes}
+                className="text-xs border px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0
+                  border-clinical-border bg-clinical-light text-clinical hover:bg-clinical hover:text-white"
+              >
+                {copie ? 'Copié' : 'Copier le jeu'}
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">

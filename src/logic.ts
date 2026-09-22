@@ -43,9 +43,9 @@ export type Direction = 'tighter' | 'looser' | 'unchanged'
 
 /** Décisions prises par l'utilisateur pour une séance. Toutes optionnelles. */
 export interface DecisionsSeance {
-  /** Voie retenue (moment B). */
+  /** Voie retenue pour la séance. */
   voie?: Voie
-  /** Verdict qualité révisé manuellement (§ moment A, étape 1). */
+  /** Verdict qualité révisé manuellement. */
   qualite?: VerdictQualite
   /** Verdict déformation révisé manuellement (étape 2). */
   deformation?: VerdictDeformation
@@ -791,7 +791,7 @@ export interface ComparaisonDose {
 
 /**
  * Compare les deux candidates au cumul (RTDosej sur IRM vs RTDose sCT).
- * Retourne un choix par défaut motivé — jamais imposé (§ moment A).
+ * Retourne un choix par défaut motivé — jamais imposé.
  */
 export function comparerCandidates(
   seance: MesuresSeance,
@@ -1165,7 +1165,7 @@ function niveauEcart(structure: Structure, ecartRelatif: number): Niveau {
   return 'neutral'
 }
 
-// ─── Moment B — Recommandation ATP / ATS ─────────────────────────────────────
+// ─── Recommandation ATP / ATS ────────────────────────────────────────────────
 
 export interface Justification {
   niveau: Niveau
@@ -1346,7 +1346,7 @@ export function recommanderVoie(
   }
 }
 
-// ─── Moment C — Proposition de contraintes ───────────────────────────────────
+// ─── Proposition de contraintes ──────────────────────────────────────────────
 
 export interface PropositionContrainte {
   id: string
@@ -1438,7 +1438,7 @@ export function exporterContraintes(
   return [...entete, '', ...lignes].join('\n')
 }
 
-// ─── Moment D — Rapport de fin de traitement ─────────────────────────────────
+// ─── Rapport de fin de traitement ────────────────────────────────────────────
 
 export type StatutFinal = 'conforme' | 'vigilance' | 'depassement'
 
@@ -1648,124 +1648,6 @@ export const labelEtatObjet: Record<EtatObjet, { court: string; long: string; ni
   present: { court: '✓', long: 'Présent', niveau: 'ok' },
   'non-exporte': { court: 'N/E', long: 'Non exporté par la machine', niveau: 'neutral' },
   absent: { court: '—', long: 'Absent', niveau: 'neutral' },
-}
-
-// ─── Les quatre moments et leur place dans le temps ──────────────────────────
-
-export type MomentId = 'moment-A' | 'moment-B' | 'moment-C' | 'moment-D'
-
-export interface DescriptionMoment {
-  id: MomentId
-  tag: string
-  label: string
-  /** Où ce moment se situe dans le déroulement du traitement (§3 du brief). */
-  quand: string
-  /** À quoi il sert, en une phrase. */
-  role: string
-  /** Où le trouver dans l'interface. */
-  acces: string
-}
-
-/**
- * Description de référence des quatre moments. Une seule source : la barre
- * latérale et le guide d'utilisation la partagent, ils ne peuvent donc plus
- * décrire des accès différents.
- */
-export const MOMENTS: DescriptionMoment[] = [
-  {
-    id: 'moment-A',
-    tag: 'A',
-    label: 'Validation inter-séance',
-    quand: 'Après la séance, hors ligne',
-    role: "Vérifier la qualité de l'IRM, l'ampleur de la déformation et la dose retenue, "
-      + 'puis valider le cumul. Sans contrainte de temps.',
-    acces: 'Barre latérale « Aide à la décision », ou « Récap de la séance » en fin de workflow',
-  },
-  {
-    id: 'moment-B',
-    tag: 'B',
-    label: 'Recommandation ATP / ATS',
-    quand: 'En séance, avant l’adaptation',
-    role: "Lire en moins de 30 secondes la voie recommandée et ce qui la motive, puis trancher. "
-      + 'Aucun contour du jour n’existe encore à cet instant.',
-    acces: 'Barre latérale « Aide à la décision », ou « Analyse complète » à l’étape 2',
-  },
-  {
-    id: 'moment-C',
-    tag: 'C',
-    label: 'Contraintes d’optimisation',
-    quand: 'Juste après, si ATS a été retenu',
-    role: 'Obtenir le jeu de contraintes proposé pour la réoptimisation, le corriger si besoin, '
-      + 'puis le recopier dans le TPS.',
-    acces: 'Barre latérale « Aide à la décision », ou « Détail et export » à l’étape 3',
-  },
-  {
-    id: 'moment-D',
-    tag: 'D',
-    label: 'Rapport de traitement',
-    quand: 'Fin de traitement',
-    role: 'Consulter la synthèse du traitement réalisé, les événements notables et le journal '
-      + 'de traçabilité, puis exporter.',
-    acces: 'Barre latérale « Aide à la décision », ou menu utilisateur',
-  },
-]
-
-export interface EtatMoment extends DescriptionMoment {
-  /** Ce qu'il reste à y faire, aujourd'hui. */
-  etat: string
-  niveau: Niveau
-}
-
-/**
- * Les quatre moments ne sont pas des onglets : ce sont quatre instants
- * différents, avec des contraintes de temps opposées (§3). Les situer et dire
- * ce qui s'y joue évite de tomber dessus par hasard.
- */
-export function etatsMoments(
-  seances: SeanceEvaluee[],
-  recommandation: Recommandation,
-  seanceCourante: number,
-  nbSeances: number = dossier.nbSeances,
-): EtatMoment[] {
-  const realisees = seances.filter(s => s.realisee)
-  const aValider = realisees.filter(s => !s.validee)
-  const voie = seances.find(s => s.numero === seanceCourante)?.voie ?? null
-  const decrire = (id: MomentId) => MOMENTS.find(m => m.id === id)!
-
-  return [
-    {
-      ...decrire('moment-A'),
-      etat: realisees.length === 0
-        ? 'Aucune séance à évaluer'
-        : aValider.length > 0
-          ? `${aValider.length} séance(s) à valider — S${aValider.map(s => s.numero).join(', S')}`
-          : 'Toutes les séances sont validées',
-      niveau: aValider.length > 0 ? 'warn' : realisees.length === 0 ? 'neutral' : 'ok',
-    },
-    {
-      ...decrire('moment-B'),
-      etat: voie
-        ? `${voie} retenu pour la séance ${seanceCourante}`
-        : `Décision à prendre — ${recommandation.voie} recommandé`,
-      niveau: voie ? 'ok' : 'warn',
-    },
-    {
-      ...decrire('moment-C'),
-      etat: voie === 'ATS'
-        ? 'Jeu de contraintes proposé pour la réoptimisation'
-        : voie === 'ATP'
-          ? 'Sans objet — le plan de référence est appliqué tel quel'
-          : 'En attente de la décision du jour',
-      niveau: voie === 'ATS' ? 'ok' : 'neutral',
-    },
-    {
-      ...decrire('moment-D'),
-      etat: realisees.length >= nbSeances
-        ? 'Rapport définitif'
-        : `Provisoire — ${realisees.length} séance(s) sur ${nbSeances}`,
-      niveau: realisees.length >= nbSeances ? 'ok' : 'neutral',
-    },
-  ]
 }
 
 // ─── Référentiel de sommation (IRMref) ───────────────────────────────────────
@@ -1980,7 +1862,7 @@ export interface EtatApresSeance {
   prochaineSeanceISO: string
   statut: 'en-cours' | 'termine'
   /** Prochaine action attendue de l'équipe. */
-  action: 'validation-requise' | 'rapport-disponible'
+  action: 'seance-a-venir' | 'rapport-disponible'
   confiance: Confiance
   /** Le protocole est allé au bout. */
   protocoleTermine: boolean
@@ -2017,7 +1899,7 @@ export function etatApresSeance(
       : prochaineISO ? formatDateCourte(prochaineISO) : 'À planifier',
     prochaineSeanceISO: prochaineISO,
     statut: protocoleTermine ? 'termine' : 'en-cours',
-    action: protocoleTermine ? 'rapport-disponible' : 'validation-requise',
+    action: protocoleTermine ? 'rapport-disponible' : 'seance-a-venir',
     confiance: cumul.confiance,
     protocoleTermine,
   }

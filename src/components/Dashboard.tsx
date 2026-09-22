@@ -50,7 +50,7 @@ export interface PatientRecord {
   dernierSeanceDate: string
   prochaineSeanceDate: string
   statut: 'en-cours' | 'termine' | 'planification' | 'en-attente'
-  action: 'validation-requise' | 'decision-en-seance' | 'rapport-disponible' | 'planification' | 'aucune'
+  action: 'seance-a-venir' | 'decision-en-seance' | 'rapport-disponible' | 'planification' | 'aucune'
   confiance: 'haute' | 'moyenne' | 'faible' | null
   alertes: string[]
   medecin: string
@@ -108,7 +108,7 @@ export const patientsDemo: PatientRecord[] = [
     dernierSeanceDate: '29 août 2026',
     prochaineSeanceDate: '04 sept. 2026',
     statut: 'en-cours',
-    action: 'validation-requise',
+    action: 'seance-a-venir',
     confiance: 'haute',
     alertes: [],
     medecin: 'Dr Fontaine',
@@ -144,7 +144,7 @@ export const patientsDemo: PatientRecord[] = [
     dernierSeanceDate: '01 sept. 2026',
     prochaineSeanceDate: '05 sept. 2026',
     statut: 'en-cours',
-    action: 'validation-requise',
+    action: 'seance-a-venir',
     confiance: 'haute',
     alertes: [],
     medecin: 'Dr Marchand',
@@ -240,19 +240,20 @@ function BarreSeances({ p }: { p: PatientRecord }) {
 
 const actionLabels: Record<PatientRecord['action'], { label: string; style: string }> = {
   'decision-en-seance': { label: 'Décision en séance',  style: 'bg-warn-bg text-warn border border-warn-border' },
-  'validation-requise': { label: 'Validation requise',  style: 'bg-clinical-light text-clinical border border-clinical-border' },
+  'seance-a-venir': { label: 'Séance à venir',      style: 'bg-clinical-light text-clinical border border-clinical-border' },
   'rapport-disponible': { label: 'Rapport disponible',  style: 'bg-ok-bg text-ok border border-ok-border' },
   'planification':      { label: 'En planification',    style: 'bg-slate-100 text-slate-500 border border-slate-200' },
   'aucune':             { label: '—',                   style: 'text-slate-400' },
 }
 
-// Étapes du workflow (3) et position courante selon l'action du patient
-const workflowStepLabels = ['Planning', 'IRM du jour', 'Adaptation']
+// Étapes du workflow et position courante selon l'action du patient.
+// La liste suit celle de la barre latérale : cinq étapes depuis la version 4.
+const workflowStepLabels = ['Planning', 'IRM du jour', 'Adaptation', 'Gating', 'Post-traitement']
 const workflowStepIndex: Record<PatientRecord['action'], number> = {
   'planification':      0,
-  'validation-requise': 1,
+  'seance-a-venir':     1,
   'decision-en-seance': 2,
-  'rapport-disponible': 3,
+  'rapport-disponible': 5,
   'aucune':             1,
 }
 
@@ -717,7 +718,7 @@ export default function Dashboard({
 
   const urgents = patients.filter(p => p.action === 'decision-en-seance' || p.alertes.length > 0)
   const enCours = patients.filter(p => p.statut === 'en-cours').length
-  const aValider = patients.filter(p => p.action === 'validation-requise').length
+  const aVenir = patients.filter(p => p.action === 'seance-a-venir').length
 
   const handleLocalisationChange = (val: string) => {
     const loc = localisations.find(l => l.label === val)
@@ -911,7 +912,7 @@ export default function Dashboard({
         <div className="grid grid-cols-4 gap-4">
           {[
             { label: 'Patients actifs', val: enCours, sub: 'traitements en cours', color: 'text-clinical' },
-            { label: 'À valider', val: aValider, sub: 'validations inter-séance en attente', color: 'text-clinical' },
+            { label: 'Séances à venir', val: aVenir, sub: 'prochaines séances planifiées', color: 'text-clinical' },
             { label: 'Décision en séance', val: urgents.filter(p => p.action === 'decision-en-seance').length, sub: 'recommandation ATP/ATS en attente', color: 'text-warn' },
             { label: 'Alertes actives', val: urgents.filter(p => p.alertes.length > 0).length, sub: 'patients avec dérive du cumul', color: 'text-danger' },
           ].map((s, i) => (

@@ -42,7 +42,7 @@ const fondEvenement: Record<Niveau, string> = {
   neutral: 'bg-slate-50 border-slate-200',
 }
 
-export default function MomentD() {
+export default function RapportTraitement() {
   const d = useDossier()
   const identite = d.identite(dossier)
 

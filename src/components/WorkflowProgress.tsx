@@ -45,16 +45,16 @@ const steps: {
   },
   {
     id: 'step-4',
-    label: '4. Gating et délivrance',
-    sub: 'Traitement asservi',
+    label: '4. Gating',
+    sub: 'Délivrance du traitement',
     headerColor: 'bg-gating',
     fillColor: 'bg-gating',
     textColor: 'text-gating',
   },
   {
     id: 'step-5',
-    label: '5. Données supplémentaires',
-    sub: 'Post-traitement · clôture',
+    label: '5. Post-traitement',
+    sub: 'Données supplémentaires · clôture',
     headerColor: 'bg-app-sidebar',
     fillColor: 'bg-app-sidebar',
     textColor: 'text-app-sidebar',
@@ -142,6 +142,7 @@ export default function WorkflowProgress({ current, onChange, completions, colla
             <div key={step.id} className="flex items-stretch flex-1 min-w-0">
               <button
                 onClick={() => onChange(step.id)}
+                title={`${step.label} — ${step.sub}`}
                 className={`flex-1 flex flex-col text-left transition-all ${
                   isCurrent ? 'bg-clinical-light/60' : 'hover:bg-slate-50/60'
                 }`}
@@ -157,14 +158,17 @@ export default function WorkflowProgress({ current, onChange, completions, colla
                   )}
                 </div>
 
-                <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+                <div className="px-3 py-2.5 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className={`text-xs font-semibold truncate ${
                       isCurrent ? step.textColor : 'text-slate-600'
                     }`}>
                       {step.label}
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5 truncate">{step.sub}</div>
+                    {/* Cinq étapes ne tiennent pas côte à côte sous 1280 px : le
+                        sous-titre s'efface avant que le nom de l'étape ne soit
+                        tronqué. Il reste en infobulle. */}
+                    <div className="text-xs text-slate-400 mt-0.5 truncate hidden xl:block">{step.sub}</div>
                   </div>
                   <span className={`text-xs shrink-0 ${lbl.cls}`}>{lbl.icon}</span>
                 </div>

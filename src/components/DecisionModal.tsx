@@ -8,7 +8,7 @@
  *
  * Elle porte de quoi décider, et non le seul nom de la voie recommandée :
  * l'outil propose, l'humain décide, et on ne décide pas sur une étiquette.
- * L'analyse complète reste à un clic (moment B).
+ * C'est ici que vit l'analyse — il n'y a plus d'écran séparé où la chercher.
  * ──────────────────────────────────────────────────────────────────────────── */
 
 import { CONVENTION_AXES, fmt, fmtSigne, type Recommandation, type Voie } from '../logic'
@@ -34,12 +34,11 @@ interface Props {
   /** Seul le radiothérapeute tranche (§2 du brief). */
   peutDecider: boolean
   onChoisir: (v: Voie) => void
-  onVoirAnalyse: () => void
   onFermer: () => void
 }
 
 export default function DecisionModal({
-  seance, reco, decisionEnregistree, peutDecider, onChoisir, onVoirAnalyse, onFermer,
+  seance, reco, decisionEnregistree, peutDecider, onChoisir, onFermer,
 }: Props) {
   // Les arguments qui pèsent le plus se lisent en premier.
   const justifications = [...reco.justifications].sort((a, b) => b.poids - a.poids)
@@ -188,13 +187,7 @@ export default function DecisionModal({
             </>
           )}
 
-          <div className="flex items-center justify-between mt-3">
-            <button
-              onClick={onVoirAnalyse}
-              className="text-xs text-clinical hover:underline font-semibold"
-            >
-              Analyse complète (moment B) →
-            </button>
+          <div className="flex justify-end mt-3">
             <button
               onClick={onFermer}
               className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
