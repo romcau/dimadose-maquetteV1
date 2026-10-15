@@ -13,10 +13,12 @@
  * ──────────────────────────────────────────────────────────────────────────── */
 
 import {
+  affectationsDensite,
   dossier,
   formatNombre,
   mesuresSeances,
   structures,
+  type AffectationDensite,
   type CritereComparaison,
   type MesuresDeformation,
   type MesuresQualite,
@@ -41,9 +43,9 @@ export type Direction = 'tighter' | 'looser' | 'unchanged'
 
 /** Décisions prises par l'utilisateur pour une séance. Toutes optionnelles. */
 export interface DecisionsSeance {
-  /** Voie retenue (moment B). */
+  /** Voie retenue pour la séance. */
   voie?: Voie
-  /** Verdict qualité révisé manuellement (§ moment A, étape 1). */
+  /** Verdict qualité révisé manuellement. */
   qualite?: VerdictQualite
   /** Verdict déformation révisé manuellement (étape 2). */
   deformation?: VerdictDeformation
@@ -58,32 +60,486 @@ export interface DecisionsSeance {
   texteDeviation?: string
   /** Nouvelle acquisition demandée (IRM inexploitable). */
   reacquisition?: boolean
+  /** Qualification de la séance en fin de workflow — voir `VerdictSeance`. */
+  verdict?: VerdictSeance
+  /**
+   * Comment s'est passé le recalage du jour, et quelle affectation de densité
+   * a été retenue. Texte libre : ce sont des observations que rien ne calcule,
+   * et qui expliquent après coup pourquoi une séance ressemble à ce qu'elle
+   * est. Elles suivent au rapport et au journal.
+   */
+  noteRecalage?: string
+  noteDensites?: string
+  /**
+   * Données facultatives rechargées après une séance ATP.
+   *
+   * Une séance ATP applique le plan de référence, et n'a donc en principe rien
+   * à réimporter. Mais le plan peut avoir été retouché en séance, et une IRM
+   * de vérification peut avoir été acquise. Quand ces objets reviennent, la
+   * dose de la séance cesse d'être une estimation — c'est ce qui fait sortir
+   * la séance de l'état « information réduite ».
+   */
+  /** Ce que l'équipe rapporte de la délivrance — voir `SuiviGating`. */
+  gating?: SuiviGating
+  /**
+   * Commentaire libre laissé au bas d'une étape, par identifiant d'étape.
+   *
+   * Facultatif, et destiné à la séance suivante : c'est ce qu'un opérateur
+   * dirait de vive voix à celui qui prendra la main demain, et que rien
+   * d'autre ne transporte. Repris au rapport de traitement.
+   */
+  commentairesEtape?: Record<string, string>
+  /** IRM acquise après la séance, facultative — voir l'étape 5. */
+  irmPostTraitement?: boolean
+  atpOptionnel?: {
+    /** Plan effectivement délivré, s'il diffère du plan de référence. */
+    rtplan?: boolean
+    /** Dose recalculée sur le plan délivré — candidate au cumul. */
+    rtdose?: boolean
+    /** IRM de vérification post-adaptation. */
+    irmv?: boolean
+  }
 }
 
 export type Decisions = Record<number, DecisionsSeance>
+
+// ─── Qualification d'une séance ──────────────────────────────────────────────
+
+/**
+ * Le code posé par l'équipe à la fin d'une séance. Il résume, d'un coup d'œil
+ * sur le tableau de bord, ce que les écrans détaillent — et il est *dit* par
+ * quelqu'un : ce n'est pas une valeur calculée, c'est un jugement humain, au
+ * même titre que la décision ATP/ATS.
+ */
+export type CodeSeance = 'vert' | 'orange' | 'rouge'
+
+export interface VerdictSeance {
+  code: CodeSeance
+  /** Ce qui s'est passé. Obligatoire dès que le code n'est pas vert. */
+  commentaire: string
+  par: string
+  horodatage: string
+}
+
+export const libellesCodeSeance: Record<CodeSeance, string> = {
+  vert: 'Conforme',
+  orange: 'Point particulier',
+  rouge: 'Non conforme',
+}
+
+export const explicationsCodeSeance: Record<CodeSeance, string> = {
+  vert: "La séance s'est déroulée comme attendu",
+  orange: 'Quelque chose mérite d’être signalé, sans remettre la séance en cause',
+  rouge: "La séance ne correspond pas à ce qui était attendu",
+}
+
+/** Jetons de couleur, pour que le tableau de bord et le workflow s'accordent. */
+export const couleursCodeSeance: Record<CodeSeance, { pastille: string; texte: string; fond: string; bord: string }> = {
+  vert:   { pastille: 'bg-ok',     texte: 'text-ok-text',     fond: 'bg-ok-bg',     bord: 'border-ok-border' },
+  orange: { pastille: 'bg-warn',   texte: 'text-warn-text',   fond: 'bg-warn-bg',   bord: 'border-warn-border' },
+  rouge:  { pastille: 'bg-danger', texte: 'text-danger-text', fond: 'bg-danger-bg', bord: 'border-danger-border' },
+}
+
+/**
+ * Un code orange ou rouge sans explication ne transmet rien : la personne qui
+ * lira le tableau de bord dans trois semaines saura qu'il s'est passé quelque
+ * chose, sans savoir quoi. Le commentaire est donc exigé dès qu'on s'écarte du
+ * vert.
+ */
+export function verdictIncomplet(code: CodeSeance, commentaire: string): string | null {
+  if (code === 'vert') return null
+  return commentaire.trim().length === 0
+    ? `Un code ${libellesCodeSeance[code].toLowerCase()} demande une explication : dites ce qui s'est passé.`
+    : null
+}
 
 // ─── Droits par profil ───────────────────────────────────────────────────────
 
 export interface Droits {
   /** Valider une étape du workflow. */
   peutValiderEtape: boolean
-  /** Trancher entre ATP et ATS — réservé au radiothérapeute (§2 du brief). */
+  /**
+   * Trancher entre ATP et ATS.
+   *
+   * Ouvert à tous les profils : la décision est un passage obligé du workflow,
+   * et nul ne doit pouvoir l'esquiver faute de droit. Le §2 du brief la
+   * réserve au radiothérapeute — le journal nomme donc qui a tranché, ce qui
+   * permettra de resserrer plus tard sans rien perdre de l'historique.
+   */
   peutDeciderVoie: boolean
   /** Réviser un verdict et valider le cumul d'une séance — travail du physicien. */
   peutEvaluerSeance: boolean
   /** Charger des données dans le dossier. */
   peutCharger: boolean
   lectureSeule: boolean
+  /**
+   * Voir qui est le patient — nom, prénom, date de naissance, identifiant.
+   *
+   * Faux pour un partenaire extérieur à l'établissement : il regarde comment
+   * l'outil raisonne, ce qui ne demande pas de savoir qui est traité.
+   */
+  voitIdentitePatient: boolean
+  /** Créer ou supprimer un dossier patient. */
+  peutGererPatients: boolean
 }
 
 export function droits(role: Role): Droits {
-  const lectureSeule = role === 'manipulateur'
+  const interne = role !== 'partenaire'
+  const lectureSeule = role === 'manipulateur' || role === 'partenaire'
   return {
     peutValiderEtape: role === 'physicien' || role === 'medecin',
-    peutDeciderVoie: role === 'medecin',
+    peutDeciderVoie: true,
     peutEvaluerSeance: role === 'physicien',
     peutCharger: !lectureSeule,
     lectureSeule,
+    voitIdentitePatient: interne,
+    peutGererPatients: interne && !lectureSeule,
+  }
+}
+
+// ─── Score d'une contrainte ──────────────────────────────────────────────────
+
+export interface ScoreContrainte {
+  /** 0 à 100. */
+  valeur: number
+  niveau: Niveau
+  libelle: string
+  /** Marge restante sur l'objectif de fin de traitement, dans l'unité de la structure. */
+  marge: number
+}
+
+/**
+ * Où en est une contrainte, sur une échelle de 0 à 100.
+ *
+ * **Ce n'est pas un indice clinique validé.** C'est une lecture : elle place
+ * la projection de fin de traitement par rapport à l'objectif, à l'échelle de
+ * la tolérance admise. Elle sert à parcourir un tableau d'un coup d'œil, pas à
+ * décider — la décision reste sur les valeurs elles-mêmes.
+ *
+ *   100 — la projection reste à une tolérance entière du plafond
+ *    50 — la projection est exactement sur l'objectif
+ *     0 — la projection dépasse l'objectif d'une tolérance entière
+ *
+ * Entre ces points, la variation est linéaire. La tolérance est donnée par
+ * séance ; elle est ramenée à l'échelle du traitement par `nbSeances`.
+ */
+export function scorerContrainte(
+  structure: Structure,
+  projection: number,
+  toleranceParSeance: number,
+  nbSeances: number,
+): ScoreContrainte {
+  const toleranceTotale = Math.max(toleranceParSeance * nbSeances, 1e-6)
+  // Marge positive = du bon côté de l'objectif, quel que soit le sens.
+  const marge = structure.sens === 'max'
+    ? structure.objectifTotal - projection
+    : projection - structure.objectifTotal
+
+  const brut = 50 + 50 * (marge / toleranceTotale)
+  const valeur = Math.round(Math.min(100, Math.max(0, brut)))
+
+  const niveau: Niveau = valeur >= 75 ? 'ok' : valeur >= 50 ? 'warn' : 'danger'
+  const libelle = valeur >= 75 ? 'Confortable' : valeur >= 50 ? 'Juste' : 'Dépassé'
+
+  return { valeur, niveau, libelle, marge }
+}
+
+/**
+ * Score d'ensemble, moyenne simple des contraintes affichées.
+ *
+ * Moyenne simple et non pondérée : pondérer supposerait une hiérarchie entre
+ * organes que la maquette n'a pas à décréter.
+ */
+export function scoreGlobal(scores: ScoreContrainte[]): ScoreContrainte | null {
+  if (scores.length === 0) return null
+  const valeur = Math.round(scores.reduce((a, s) => a + s.valeur, 0) / scores.length)
+  const niveau: Niveau = valeur >= 75 ? 'ok' : valeur >= 50 ? 'warn' : 'danger'
+  const libelle = valeur >= 75 ? 'Confortable' : valeur >= 50 ? 'Juste' : 'Dépassé'
+  return { valeur, niveau, libelle, marge: 0 }
+}
+
+// ─── Gating et délivrance ────────────────────────────────────────────────────
+
+/**
+ * Comment la délivrance s'est passée, du point de vue de l'asservissement.
+ *
+ * Ce n'est pas une mesure : la machine n'exporte ni l'imagerie ciné 2D, ni le
+ * critère de gating, ni les décalages temps réel (§ du brief). C'est donc
+ * l'équipe qui le dit, et c'est la seule trace qu'il en reste.
+ */
+export type DeroulementGating = 'ras' | 'ajustements' | 'gros-ajustements'
+
+export const libellesDeroulementGating: Record<DeroulementGating, string> = {
+  'ras': 'RAS — rien de notable',
+  'ajustements': "Besoin d'ajuster",
+  'gros-ajustements': 'Gros ajustements',
+}
+
+export const explicationsDeroulementGating: Record<DeroulementGating, string> = {
+  'ras': "L'asservissement a tenu, aucune reprise",
+  'ajustements': 'Quelques reprises, sans remettre la séance en cause',
+  'gros-ajustements': 'Reprises nombreuses ou prolongées — à signaler au cumul',
+}
+
+export const niveauDeroulementGating: Record<DeroulementGating, Niveau> = {
+  'ras': 'ok',
+  'ajustements': 'warn',
+  'gros-ajustements': 'danger',
+}
+
+export interface SuiviGating {
+  deroulement: DeroulementGating
+  /** Ce qui s'est passé. Exigé dès qu'on sort du RAS. */
+  commentaire: string
+  /** Durée de la séance en minutes, de l'installation à la fin de délivrance. */
+  dureeMinutes: number | null
+  /** Le seuil de gating a été adapté pour cette séance. */
+  seuilAdapte: boolean
+  /** Le seuil réellement appliqué, quand il diffère du seuil du protocole. */
+  seuilApplique: string | null
+  par: string
+  horodatage: string
+}
+
+/**
+ * Comme pour la qualification de séance : un signalement sans explication ne
+ * transmet rien à qui lira le dossier plus tard.
+ */
+export function suiviGatingIncomplet(
+  deroulement: DeroulementGating,
+  commentaire: string,
+): string | null {
+  if (deroulement === 'ras') return null
+  return commentaire.trim().length === 0
+    ? "Dites ce qui a demandé un ajustement : sans cela, le signalement ne transmet rien."
+    : null
+}
+
+// ─── Plan délivré comparé au plan de référence ───────────────────────────────
+
+export interface LigneEcartPlan {
+  structure: Structure
+  /** Ce que prévoyait le plan de référence pour une séance. */
+  reference: number
+  /** Ce que donne la dose rechargée du plan réellement délivré. */
+  delivre: number
+  ecart: number
+  ecartPct: number
+  /** L'écart dépasse le seuil au-delà duquel il mérite un regard. */
+  notable: boolean
+}
+
+/** Au-delà de 5 %, l'écart au plan de référence mérite d'être regardé. */
+export const SEUIL_ECART_PLAN_PCT = 5
+
+/**
+ * Écart entre le plan délivré et le plan de référence, structure par structure.
+ *
+ * Utile après une séance ATP dont le plan a été retouché : le plan de référence
+ * n'a alors pas été appliqué tel quel, et le cumul ne doit pas faire comme si.
+ */
+export function comparerAuPlanReference(pointsDelivres: Record<string, number>): LigneEcartPlan[] {
+  return structures.map(structure => {
+    const reference = structure.prevuParSeance
+    const delivre = pointsDelivres[structure.id] ?? reference
+    const ecart = delivre - reference
+    const ecartPct = reference === 0 ? 0 : (ecart / reference) * 100
+    return {
+      structure,
+      reference,
+      delivre,
+      ecart,
+      ecartPct,
+      notable: Math.abs(ecartPct) >= SEUIL_ECART_PLAN_PCT,
+    }
+  })
+}
+
+// ─── Convention des axes du recalage ─────────────────────────────────────────
+
+export type Axe = 'x' | 'y' | 'z'
+
+/**
+ * Ce que désignent X, Y et Z, et dans quel sens.
+ *
+ * Convention IEC 61217 telle que Monaco l'emploie pour un patient en décubitus
+ * dorsal, tête en premier. **Elle n'est pas arrêtée** : à confirmer auprès de
+ * l'établissement, et elle peut différer sur MRIdian. Un décalage lu à
+ * l'envers déplacerait la table du mauvais côté — c'est pourquoi la maquette
+ * affiche la convention plutôt que de la sous-entendre.
+ */
+export interface ConventionAxe {
+  axe: Axe
+  /** Ce que l'axe parcourt. */
+  plan: string
+  /** Direction quand la valeur est positive, puis négative. */
+  positif: string
+  negatif: string
+  /** Formes courtes, pour les lignes serrées. */
+  positifCourt: string
+  negatifCourt: string
+}
+
+export const CONVENTION_AXES: ConventionAxe[] = [
+  { axe: 'x', plan: 'Latéral',      positif: 'gauche',    negatif: 'droite',     positifCourt: 'G',    negatifCourt: 'D' },
+  { axe: 'y', plan: 'Longitudinal', positif: 'supérieur', negatif: 'inférieur',  positifCourt: 'sup',  negatifCourt: 'inf' },
+  { axe: 'z', plan: 'Vertical',     positif: 'antérieur', negatif: 'postérieur', positifCourt: 'ant',  negatifCourt: 'post' },
+]
+
+export interface DecalageLu extends ConventionAxe {
+  valeur: number
+  /** Direction correspondant au signe. `null` quand la valeur est nulle. */
+  direction: string | null
+  directionCourte: string | null
+}
+
+export function lireDecalages(decalages: readonly [number, number, number]): DecalageLu[] {
+  return CONVENTION_AXES.map((c, i) => {
+    const valeur = decalages[i]
+    return {
+      ...c,
+      valeur,
+      direction: valeur === 0 ? null : valeur > 0 ? c.positif : c.negatif,
+      directionCourte: valeur === 0 ? null : valeur > 0 ? c.positifCourt : c.negatifCourt,
+    }
+  })
+}
+
+/** Phrase de rappel de la convention, affichée sous les décalages. */
+export const RAPPEL_CONVENTION_AXES =
+  CONVENTION_AXES.map(c => `${c.axe.toUpperCase()} ${c.negatif} ↔ ${c.positif}`).join(' · ')
+
+// ─── Densités affectées au RTSSp ─────────────────────────────────────────────
+
+export interface LigneDensite extends AffectationDensite {
+  /** Aucune densité affectée : la structure hérite du contour externe. */
+  absente: boolean
+  /** La densité affectée diffère de celle prévue par le protocole. */
+  ecart: boolean
+  /** Écart en g/cm³, signé. `null` quand il n'y a rien à comparer. */
+  delta: number | null
+}
+
+/**
+ * Lecture des affectations de densité.
+ *
+ * Deux choses seulement méritent l'attention d'un physicien qui relit le
+ * RTSSp : une structure sans affectation, qui prend alors la densité du
+ * contour externe sans que personne l'ait décidé, et une densité qui s'écarte
+ * du protocole. Le reste est conforme et doit se lire d'un coup d'œil.
+ */
+export function lireAffectationsDensite(): LigneDensite[] {
+  return affectationsDensite.map(a => {
+    const absente = a.densiteAffectee === null
+    return {
+      ...a,
+      absente,
+      ecart: !absente && a.densiteAffectee !== a.densiteProtocole,
+      delta: absente ? null : a.densiteAffectee! - a.densiteProtocole,
+    }
+  })
+}
+
+/** Ce qu'il y a à signaler, pour l'annoncer sans parcourir le tableau. */
+export function resumeDensites(lignes: LigneDensite[]) {
+  const ecarts = lignes.filter(l => l.ecart).length
+  const absentes = lignes.filter(l => l.absente).length
+  return { total: lignes.length, ecarts, absentes, conforme: ecarts === 0 && absentes === 0 }
+}
+
+// ─── Morphologie ─────────────────────────────────────────────────────────────
+
+/**
+ * IMC, en kg/m². Déduit de la taille et du poids : ce sont eux qui sont
+ * saisis et conservés, l'indice n'est qu'une lecture.
+ */
+export function imc(tailleCm: number, poidsKg: number): number | null {
+  if (!isFinite(tailleCm) || !isFinite(poidsKg) || tailleCm <= 0 || poidsKg <= 0) return null
+  const m = tailleCm / 100
+  return poidsKg / (m * m)
+}
+
+export interface LectureIMC {
+  valeur: number
+  libelle: string
+  /**
+   * L'IMC sort de la plage courante. Ce n'est pas un verdict : c'est un signal
+   * que le jumeau numérique peut demander une adaptation, à l'équipe d'en
+   * juger. La maquette ne décide pas à sa place.
+   */
+  horsPlage: boolean
+}
+
+export function lireIMC(valeur: number): LectureIMC {
+  // Seuils OMS, donnés comme repère de lecture et non comme règle de traitement.
+  if (valeur < 18.5) return { valeur, libelle: 'Maigreur', horsPlage: true }
+  if (valeur < 25)   return { valeur, libelle: 'Corpulence normale', horsPlage: false }
+  if (valeur < 30)   return { valeur, libelle: 'Surpoids', horsPlage: false }
+  return { valeur, libelle: 'Obésité', horsPlage: true }
+}
+
+// ─── Pseudonymisation des dossiers ───────────────────────────────────────────
+
+/**
+ * Code stable d'un dossier, dérivé de son identifiant.
+ *
+ * Stable : le même dossier porte toujours le même code, d'une session et d'un
+ * poste à l'autre. Un partenaire peut donc dire « le dossier 7C31 » et être
+ * compris, sans que personne ait nommé le patient.
+ *
+ * Le terme juste est **pseudonymisation**, pas anonymisation : qui détient la
+ * liste des dossiers peut refaire le lien. Cela protège d'un regard de passage
+ * — une démonstration, une capture d'écran, un partenaire en consultation —
+ * pas d'un recoupement délibéré.
+ */
+export function codeDossier(id: string): string {
+  // FNV-1a 32 bits : court, déterministe, sans dépendance.
+  let h = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(36).toUpperCase().slice(-4).padStart(4, '0')
+}
+
+export interface IdentiteDossier {
+  nom: string
+  prenom: string
+  id: string
+  ddn?: string
+}
+
+export interface IdentiteAffichee {
+  /** Ce qui remplace « DUPONT Michel ». */
+  libelle: string
+  /** Ce qui remplace « P-2024-0148 ». */
+  identifiant: string
+  /** Date de naissance, ou un tiret si elle est masquée. */
+  ddn: string
+  /** Vrai si l'identité est masquée — pour l'annoncer à l'écran. */
+  masquee: boolean
+}
+
+/**
+ * Comment nommer un dossier à l'écran. Point de passage unique : c'est ce qui
+ * garantit qu'aucun écran n'oublie de masquer, et qu'on n'a pas à se fier à la
+ * vigilance de chaque composant.
+ */
+export function identiteAffichee(p: IdentiteDossier, voitIdentite: boolean): IdentiteAffichee {
+  if (voitIdentite) {
+    return {
+      libelle: `${p.nom} ${p.prenom}`,
+      identifiant: p.id,
+      ddn: p.ddn ?? '—',
+      masquee: false,
+    }
+  }
+  const code = codeDossier(p.id)
+  return {
+    libelle: `Dossier ${code}`,
+    identifiant: code,
+    ddn: '—',
+    masquee: true,
   }
 }
 
@@ -335,7 +791,7 @@ export interface ComparaisonDose {
 
 /**
  * Compare les deux candidates au cumul (RTDosej sur IRM vs RTDose sCT).
- * Retourne un choix par défaut motivé — jamais imposé (§ moment A).
+ * Retourne un choix par défaut motivé — jamais imposé.
  */
 export function comparerCandidates(
   seance: MesuresSeance,
@@ -709,7 +1165,7 @@ function niveauEcart(structure: Structure, ecartRelatif: number): Niveau {
   return 'neutral'
 }
 
-// ─── Moment B — Recommandation ATP / ATS ─────────────────────────────────────
+// ─── Recommandation ATP / ATS ────────────────────────────────────────────────
 
 export interface Justification {
   niveau: Niveau
@@ -890,7 +1346,7 @@ export function recommanderVoie(
   }
 }
 
-// ─── Moment C — Proposition de contraintes ───────────────────────────────────
+// ─── Proposition de contraintes ──────────────────────────────────────────────
 
 export interface PropositionContrainte {
   id: string
@@ -982,7 +1438,7 @@ export function exporterContraintes(
   return [...entete, '', ...lignes].join('\n')
 }
 
-// ─── Moment D — Rapport de fin de traitement ─────────────────────────────────
+// ─── Rapport de fin de traitement ────────────────────────────────────────────
 
 export type StatutFinal = 'conforme' | 'vigilance' | 'depassement'
 
@@ -1194,124 +1650,6 @@ export const labelEtatObjet: Record<EtatObjet, { court: string; long: string; ni
   absent: { court: '—', long: 'Absent', niveau: 'neutral' },
 }
 
-// ─── Les quatre moments et leur place dans le temps ──────────────────────────
-
-export type MomentId = 'moment-A' | 'moment-B' | 'moment-C' | 'moment-D'
-
-export interface DescriptionMoment {
-  id: MomentId
-  tag: string
-  label: string
-  /** Où ce moment se situe dans le déroulement du traitement (§3 du brief). */
-  quand: string
-  /** À quoi il sert, en une phrase. */
-  role: string
-  /** Où le trouver dans l'interface. */
-  acces: string
-}
-
-/**
- * Description de référence des quatre moments. Une seule source : la barre
- * latérale et le guide d'utilisation la partagent, ils ne peuvent donc plus
- * décrire des accès différents.
- */
-export const MOMENTS: DescriptionMoment[] = [
-  {
-    id: 'moment-A',
-    tag: 'A',
-    label: 'Validation inter-séance',
-    quand: 'Après la séance, hors ligne',
-    role: "Vérifier la qualité de l'IRM, l'ampleur de la déformation et la dose retenue, "
-      + 'puis valider le cumul. Sans contrainte de temps.',
-    acces: 'Barre latérale « Aide à la décision », ou « Récap de la séance » en fin de workflow',
-  },
-  {
-    id: 'moment-B',
-    tag: 'B',
-    label: 'Recommandation ATP / ATS',
-    quand: 'En séance, avant l’adaptation',
-    role: "Lire en moins de 30 secondes la voie recommandée et ce qui la motive, puis trancher. "
-      + 'Aucun contour du jour n’existe encore à cet instant.',
-    acces: 'Barre latérale « Aide à la décision », ou « Analyse complète » à l’étape 2',
-  },
-  {
-    id: 'moment-C',
-    tag: 'C',
-    label: 'Contraintes d’optimisation',
-    quand: 'Juste après, si ATS a été retenu',
-    role: 'Obtenir le jeu de contraintes proposé pour la réoptimisation, le corriger si besoin, '
-      + 'puis le recopier dans le TPS.',
-    acces: 'Barre latérale « Aide à la décision », ou « Détail et export » à l’étape 3',
-  },
-  {
-    id: 'moment-D',
-    tag: 'D',
-    label: 'Rapport de traitement',
-    quand: 'Fin de traitement',
-    role: 'Consulter la synthèse du traitement réalisé, les événements notables et le journal '
-      + 'de traçabilité, puis exporter.',
-    acces: 'Barre latérale « Aide à la décision », ou menu utilisateur',
-  },
-]
-
-export interface EtatMoment extends DescriptionMoment {
-  /** Ce qu'il reste à y faire, aujourd'hui. */
-  etat: string
-  niveau: Niveau
-}
-
-/**
- * Les quatre moments ne sont pas des onglets : ce sont quatre instants
- * différents, avec des contraintes de temps opposées (§3). Les situer et dire
- * ce qui s'y joue évite de tomber dessus par hasard.
- */
-export function etatsMoments(
-  seances: SeanceEvaluee[],
-  recommandation: Recommandation,
-  seanceCourante: number,
-  nbSeances: number = dossier.nbSeances,
-): EtatMoment[] {
-  const realisees = seances.filter(s => s.realisee)
-  const aValider = realisees.filter(s => !s.validee)
-  const voie = seances.find(s => s.numero === seanceCourante)?.voie ?? null
-  const decrire = (id: MomentId) => MOMENTS.find(m => m.id === id)!
-
-  return [
-    {
-      ...decrire('moment-A'),
-      etat: realisees.length === 0
-        ? 'Aucune séance à évaluer'
-        : aValider.length > 0
-          ? `${aValider.length} séance(s) à valider — S${aValider.map(s => s.numero).join(', S')}`
-          : 'Toutes les séances sont validées',
-      niveau: aValider.length > 0 ? 'warn' : realisees.length === 0 ? 'neutral' : 'ok',
-    },
-    {
-      ...decrire('moment-B'),
-      etat: voie
-        ? `${voie} retenu pour la séance ${seanceCourante}`
-        : `Décision à prendre — ${recommandation.voie} recommandé`,
-      niveau: voie ? 'ok' : 'warn',
-    },
-    {
-      ...decrire('moment-C'),
-      etat: voie === 'ATS'
-        ? 'Jeu de contraintes proposé pour la réoptimisation'
-        : voie === 'ATP'
-          ? 'Sans objet — le plan de référence est appliqué tel quel'
-          : 'En attente de la décision du jour',
-      niveau: voie === 'ATS' ? 'ok' : 'neutral',
-    },
-    {
-      ...decrire('moment-D'),
-      etat: realisees.length >= nbSeances
-        ? 'Rapport définitif'
-        : `Provisoire — ${realisees.length} séance(s) sur ${nbSeances}`,
-      niveau: realisees.length >= nbSeances ? 'ok' : 'neutral',
-    },
-  ]
-}
-
 // ─── Référentiel de sommation (IRMref) ───────────────────────────────────────
 
 export interface OptionReferentiel {
@@ -1364,6 +1702,7 @@ export function referentielsPossibles(
 
 export type CategorieTrace =
   | 'etape'
+  | 'note'
   | 'voie'
   | 'verdict'
   | 'sommation'
@@ -1405,6 +1744,7 @@ export interface EntreeTrace {
 
 export const labelCategorieTrace: Record<CategorieTrace, string> = {
   etape: "Validation d'étape",
+  note: 'Observation de séance',
   voie: 'Décision ATP / ATS',
   verdict: 'Révision de verdict',
   sommation: 'Mode de sommation',
@@ -1420,6 +1760,7 @@ export const labelCategorieTrace: Record<CategorieTrace, string> = {
 
 export const niveauCategorieTrace: Record<CategorieTrace, Niveau> = {
   etape: 'ok',
+  note: 'neutral',
   voie: 'warn',
   verdict: 'warn',
   sommation: 'warn',
@@ -1443,6 +1784,7 @@ export const rangCategorieTrace: Record<CategorieTrace, RangTrace> = {
   sommation: 'decision',
   reacquisition: 'decision',
   etape: 'verification',
+  note: 'verification',
   validation: 'verification',
   seance: 'verification',
   dose: 'verification',
@@ -1520,7 +1862,7 @@ export interface EtatApresSeance {
   prochaineSeanceISO: string
   statut: 'en-cours' | 'termine'
   /** Prochaine action attendue de l'équipe. */
-  action: 'validation-requise' | 'rapport-disponible'
+  action: 'seance-a-venir' | 'rapport-disponible'
   confiance: Confiance
   /** Le protocole est allé au bout. */
   protocoleTermine: boolean
@@ -1557,7 +1899,7 @@ export function etatApresSeance(
       : prochaineISO ? formatDateCourte(prochaineISO) : 'À planifier',
     prochaineSeanceISO: prochaineISO,
     statut: protocoleTermine ? 'termine' : 'en-cours',
-    action: protocoleTermine ? 'rapport-disponible' : 'validation-requise',
+    action: protocoleTermine ? 'rapport-disponible' : 'seance-a-venir',
     confiance: cumul.confiance,
     protocoleTermine,
   }

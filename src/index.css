@@ -6,19 +6,34 @@
   --font-family-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
-  /* Clinical workflow colors — teal theme */
-  --color-clinical: #04b8c5;
-  --color-clinical-mid: #0399a6;
-  --color-clinical-light: #eafbfc;
-  --color-clinical-border: #9ae5ea;
+  /* ── Couleurs de la marque ───────────────────────────────────────────────
+   * Reprises du logo DIMADOSE. Le bleu porte toute l'interface ; l'orange et
+   * le bleu clair appartiennent au logo et ne servent pas de couleur d'action.
+   *
+   * L'orange en particulier n'est jamais réemployé dans l'interface : il est
+   * trop proche de l'ambre des avertissements (--color-warn). Dans un outil où
+   * la couleur dit s'il faut regarder quelque chose, un orange décoratif se
+   * lirait comme une alerte. Il reste au logo.
+   */
+  --color-marque-bleu: #095386;
+  --color-marque-orange: #f5951c;
+  --color-marque-cyan: #6ecbe8;
+
+  /* Couleurs du workflow clinique — relevées dans le fichier du logo.
+   * Contraste sur blanc : 8,12:1 (WCAG AA et AAA pour du texte). Le turquoise
+   * précédent plafonnait à 2,42:1, sous le minimum de 4,5:1. */
+  --color-clinical: #095386;
+  --color-clinical-mid: #063d63;
+  --color-clinical-light: #e8f0f7;
+  --color-clinical-border: #aecbe1;
 
   --color-gating: #b34728;
   --color-gating-light: #fde8dc;
   --color-gating-border: #f0c4ac;
 
   /* App background */
-  --color-app-bg: #e5f8f9;
-  --color-app-sidebar: #0b2a2c;
+  --color-app-bg: #eef4f9;
+  --color-app-sidebar: #06253c;
 
   /* Status semantics */
   --color-ok: #16a34a;
@@ -45,5 +60,5 @@ html, body, #root {
 *::-webkit-scrollbar { width: 4px; height: 4px; }
 *::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
 
-:focus-visible { outline: 2px solid #04b8c5; outline-offset: 1px; }
+:focus-visible { outline: 2px solid var(--color-marque-bleu); outline-offset: 1px; }
 button:focus:not(:focus-visible), input:focus:not(:focus-visible) { outline: none; }

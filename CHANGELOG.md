@@ -7,6 +7,124 @@ exactement au code du commit.
 
 Le numéro vit dans `package.json`. Chaque version fusionnée sur `main` est étiquetée `vX.Y.Z`.
 
+## v4.0.0 — 18 septembre 2026
+
+Revue du 17 septembre. Le workflow passe de quatre à cinq étapes, la confidentialité devient un
+profil, et l'identité visuelle suit le nouveau logo.
+
+### Identité visuelle
+
+L'interface était bâtie sur un turquoise absent du logo. Le bleu et l'orange sont maintenant
+relevés dans le fichier de la marque : `#095386` et `#f5951c`. Le turquoise donnait **2,42:1**
+de contraste sur blanc, sous le minimum WCAG AA de 4,5:1 ; le bleu de la marque donne
+**8,12:1**.
+
+L'orange n'est pas repris comme couleur d'interface — trop proche de l'ambre des
+avertissements, il se lirait comme une alerte.
+
+Le logo fourni est un PNG opaque sur fond gris, ce gris occupant aussi les interstices du
+viseur. `scripts/preparer-logo.mjs` le détoure en estimant l'opacité de chaque pixel, recadre
+le symbole et le réduit. Sur fond sombre il est posé sur une pastille claire : le recolorer
+serait le trahir.
+
+Le wordmark était recopié en dur dans trois fichiers, chacun avec ses couleurs. Tout passe par
+un composant unique.
+
+### Confidentialité — profil partenaire
+
+Un partenaire extérieur regarde comment l'outil raisonne, pas qui est traité. Le profil
+`partenaire` est en consultation seule et voit « Dossier AY7Y » au lieu du nom, du prénom, de
+la date de naissance et de l'identifiant.
+
+Le masquage passe par un point unique lié aux droits : aucun écran n'a à s'en souvenir. Le
+terme juste est **pseudonymisation** — le code dérive de l'identifiant, donc qui détient la
+liste peut refaire le lien.
+
+Trois fuites trouvées en vérifiant : le récap DICOM ouvrait son contexte sans utilisateur et
+retombait sur le profil par défaut ; « Gestion des utilisateurs » restait ouverte, avec les
+adresses du personnel ; les droits du tableau de bord étaient déduits d'un test écrit à la
+main.
+
+### Workflow — cinq étapes
+
+**Planning initial.** Tableau des densités affectées au RTSSp, affiché dès son chargement.
+L'IRM ne porte pas de densité électronique : ce qui est affecté change la dose calculée sans
+que rien ne le montre. Deux cas sont mis en avant — une densité qui s'écarte du protocole, et
+une structure sans affectation, qui prend celle du contour externe sans que personne l'ait
+décidé.
+
+**IRM du jour.** Les décalages portent leur axe et le sens correspondant à leur signe, et la
+convention est affichée plutôt que sous-entendue. Une entrée RTSSj recueille deux observations
+libres : déroulement du recalage, affectation de densité retenue.
+
+**Évaluation des séances précédentes.** Retirer les moments avait emporté leur contenu : les
+trois vérifications d'avant-cumul — qualité de l'IRM, ampleur de la déformation, distribution
+de dose versée — n'avaient plus d'écran, alors que le moteur continuait de les calculer. Elles
+reviennent en tête de l'IRM du jour, repliées par défaut et ouvertes d'elles-mêmes quand une
+séance réclame un arbitrage. Chaque verdict automatique est révisable ; une déformation
+importante impose de choisir entre cumuler en signalant l'incertitude, cumuler en rigide seul,
+ou exclure la séance ; le critère de comparaison des deux candidates de dose redevient un
+paramètre visible, parce qu'il n'est pas tranché dans le projet. Rien ne s'y valide — la
+validation inter-séance reste hors du parcours.
+
+**Décision ATP / ATS.** Passage obligé, une fois par séance, quelle que soit la route — deux
+routes sur trois l'évitaient. La fenêtre porte les arguments classés par poids avec leurs
+chiffres, les décalages du jour, et ce que l'outil n'a pas : ni contour, ni volume, ni DVH du
+jour n'existent à cet instant. S'écarter de la proposition ouvre la question du motif : liste
+courte et précision libre, enregistrées avec la décision. La fenêtre annonçait ce motif au
+journal sans l'avoir jamais demandé.
+
+**Adaptation.** Contraintes et tolérances se modifient dans le tableau. Un score place la
+projection de fin de traitement par rapport à l'objectif, à l'échelle de la tolérance, avec un
+score d'ensemble sur 100 — ni indice clinique validé, ni la même chose que l'écart au
+prévisionnel, et le pied du tableau le dit. Un bouton rend le jeu complet aux contraintes du
+plan de référence, tolérances comprises : l'ajustement proposé par le cumul reste une
+proposition, et la refuser en bloc tient en un geste et une ligne de journal. En ATP, des
+données facultatives peuvent être rechargées ; la dose cesse alors d'être estimée.
+
+**Gating et délivrance du traitement.** La machine n'exporte ni l'imagerie ciné, ni le critère
+d'asservissement, ni les décalages temps réel : ce que l'équipe rapporte est la seule trace qui
+existe. Critère affiché, seuil adapté signalé, déroulement en trois états, durée de séance.
+
+**Données supplémentaires (post-traitement).** Étape nouvelle. IRM de contrôle facultative,
+commentaire pour la séance suivante, puis trois gestes : finaliser — ce qui ouvre la
+qualification —, consulter le rapport, clôturer. Les deux derniers restent inertes tant que la
+première n'est pas faite.
+
+La séance suivante ne démarre plus depuis le workflow : on repasse par le tableau de bord, et
+rouvrir le dossier ouvre la séance d'après avec le récapitulatif de la précédente.
+
+### Ailleurs
+
+- **Création de patient** : date qualifiée (simulation ou première séance), taille et poids
+  donnant l'IMC — signalé hors plage —, et machine au choix entre Unity et MRIdian.
+- **Qualification de séance** : code couleur et commentaire, portés par la barre d'avancement
+  du tableau de bord et affichés au survol. Orange et rouge exigent une explication.
+- **Commentaires d'étape** : facultatifs, écrits avant de valider et enregistrés avec la
+  validation, repris en tête de la séance suivante et au rapport.
+- **Retour en arrière** : chaque étape peut être annulée pour revenir à la précédente.
+- Le rapport s'ouvre au centre et non plus sur le côté.
+
+### Défauts corrigés, trouvés en vérifiant
+
+Finaliser une séance refermait le rapport qu'on venait d'ouvrir ; la barrière de décision
+interdisait au physicien d'ouvrir l'adaptation d'une séance pourtant décidée ; le pavé de
+séances débordait la colonne au-delà de dix fractions ; l'identifiant patient sortait à cinq
+chiffres et la date de naissance en ISO.
+
+### Points laissés ouverts
+
+- Les densités, l'IMC et le seuil de gating du jeu de démonstration sont plausibles, pas
+  validés.
+- Le profil `partenaire` peut trancher ATP / ATS, conséquence de l'ouverture de la décision à
+  tous les profils. Un compte extérieur en consultation prend alors une décision clinique
+  enregistrée à son nom.
+- Le critère de comparaison des doses IRM et sCT n'est pas arrêté : les deux options — écart
+  sur points DVH, indice gamma — ne mesurent pas la même chose et peuvent conclure
+  différemment. L'écran le dit plutôt que de choisir.
+- Le logo est un PNG détouré. Un SVG diviserait le poids par dix et resterait net à toute
+  taille.
+
 ## v3.0.0 — 15 septembre 2026
 
 Retours de relecture et refonte du journal de traçabilité.

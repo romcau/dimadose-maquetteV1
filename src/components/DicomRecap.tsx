@@ -60,6 +60,7 @@ const planning: FileRow[] = [
 
 export default function DicomRecap({ patient: p, onClose }: Props) {
   const d = useDossier()
+  const identite = d.identite(p)
   const seances = d.seances.filter(s => s.realisee)
 
   const parSeance = seances.map(s => ({
@@ -90,9 +91,9 @@ export default function DicomRecap({ patient: p, onClose }: Props) {
             <div className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1">
               Dossier DICOM — traçabilité
             </div>
-            <div className="text-lg font-bold">{p.nom} {p.prenom}</div>
+            <div className="text-lg font-bold">{identite.libelle}</div>
             <div className="text-xs opacity-60 mt-0.5 font-mono">
-              {p.id} · {p.protocole} · {totalObjets} objets · {nonExportes} non exporté(s)
+              {identite.identifiant} · {p.protocole} · {totalObjets} objets · {nonExportes} non exporté(s)
             </div>
           </div>
           <button

@@ -22,6 +22,8 @@ export interface EtatPersiste {
   seanceCourante: number
   decisions: Decisions
   contraintesEditees: Record<number, Record<string, number>>
+  /** Tolérances ajustées à la main, par séance puis par structure. */
+  tolerancesEditees?: Record<number, Record<string, number>>
   critere: CritereComparaison
   irmref: string
   trace: EntreeTrace[]
