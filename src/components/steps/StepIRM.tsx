@@ -11,6 +11,7 @@ import {
   type Voie,
 } from '../../logic'
 import { useDossier } from '../../store'
+import EvaluationSeances from '../EvaluationSeances'
 import NoteSeance from './NoteSeance'
 
 /** Ce que parcourt l'axe, en une abréviation qui tient dans un pavé. */
@@ -148,6 +149,11 @@ export default function StepIRM({ canDecide, canUpload, onGoToDecision }: Props)
           )}
         </div>
       </div>
+
+      {/* ── Ce que les séances passées ont versé au cumul ──
+           Placée avant les données du jour : c'est l'historique qui motive la
+           décision de tout à l'heure, et il se tranche sans contrainte de temps. */}
+      <EvaluationSeances seance={n} modifiable={canUpload} />
 
       <div className="grid grid-cols-2 gap-5">
 

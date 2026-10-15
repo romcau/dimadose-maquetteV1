@@ -324,16 +324,12 @@ function PatientView({
     validate('step-2'); setPage('step-3')
   }
 
-  const confirmDecision = (v: Voie) => {
+  const confirmDecision = (v: Voie, motifs?: string[], texte?: string) => {
     // Reconfirmer à l'identique n'est pas une nouvelle décision : ne pas
-    // encombrer le journal d'une ligne qui ne change rien.
-    if (v !== decision) {
-      d.enregistrerVoie(
-        sessionNum,
-        v,
-        v === reco.voie ? undefined : ['Décision prise depuis le workflow, hors écran de recommandation'],
-      )
-    }
+    // encombrer le journal d'une ligne qui ne change rien. Les motifs, eux,
+    // viennent de la fenêtre : elle ne les demande que si la voie s'écarte de
+    // la proposition.
+    if (v !== decision) d.enregistrerVoie(sessionNum, v, motifs, texte)
     setDecisionVue(true)
     setDecisionModalOpen(false)
     validate('step-2')

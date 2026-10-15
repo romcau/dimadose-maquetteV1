@@ -57,16 +57,30 @@ décidé.
 convention est affichée plutôt que sous-entendue. Une entrée RTSSj recueille deux observations
 libres : déroulement du recalage, affectation de densité retenue.
 
+**Évaluation des séances précédentes.** Retirer les moments avait emporté leur contenu : les
+trois vérifications d'avant-cumul — qualité de l'IRM, ampleur de la déformation, distribution
+de dose versée — n'avaient plus d'écran, alors que le moteur continuait de les calculer. Elles
+reviennent en tête de l'IRM du jour, repliées par défaut et ouvertes d'elles-mêmes quand une
+séance réclame un arbitrage. Chaque verdict automatique est révisable ; une déformation
+importante impose de choisir entre cumuler en signalant l'incertitude, cumuler en rigide seul,
+ou exclure la séance ; le critère de comparaison des deux candidates de dose redevient un
+paramètre visible, parce qu'il n'est pas tranché dans le projet. Rien ne s'y valide — la
+validation inter-séance reste hors du parcours.
+
 **Décision ATP / ATS.** Passage obligé, une fois par séance, quelle que soit la route — deux
 routes sur trois l'évitaient. La fenêtre porte les arguments classés par poids avec leurs
 chiffres, les décalages du jour, et ce que l'outil n'a pas : ni contour, ni volume, ni DVH du
-jour n'existent à cet instant.
+jour n'existent à cet instant. S'écarter de la proposition ouvre la question du motif : liste
+courte et précision libre, enregistrées avec la décision. La fenêtre annonçait ce motif au
+journal sans l'avoir jamais demandé.
 
 **Adaptation.** Contraintes et tolérances se modifient dans le tableau. Un score place la
 projection de fin de traitement par rapport à l'objectif, à l'échelle de la tolérance, avec un
 score d'ensemble sur 100 — ni indice clinique validé, ni la même chose que l'écart au
-prévisionnel, et le pied du tableau le dit. En ATP, des données facultatives peuvent être
-rechargées ; la dose cesse alors d'être estimée.
+prévisionnel, et le pied du tableau le dit. Un bouton rend le jeu complet aux contraintes du
+plan de référence, tolérances comprises : l'ajustement proposé par le cumul reste une
+proposition, et la refuser en bloc tient en un geste et une ligne de journal. En ATP, des
+données facultatives peuvent être rechargées ; la dose cesse alors d'être estimée.
 
 **Gating et délivrance du traitement.** La machine n'exporte ni l'imagerie ciné, ni le critère
 d'asservissement, ni les décalages temps réel : ce que l'équipe rapporte est la seule trace qui
@@ -100,12 +114,14 @@ chiffres et la date de naissance en ISO.
 
 ### Points laissés ouverts
 
-- Le tableau de bord compte encore des « validations inter-séance en attente » et affiche
-  « Validation requise » : ces libellés désignent le moment A, retiré du flux.
-- Les moments A et C n'ont plus de point d'entrée depuis la suppression du bandeau « Aide à la
-  décision ». Leurs écrans restent en place.
 - Les densités, l'IMC et le seuil de gating du jeu de démonstration sont plausibles, pas
   validés.
+- Le profil `partenaire` peut trancher ATP / ATS, conséquence de l'ouverture de la décision à
+  tous les profils. Un compte extérieur en consultation prend alors une décision clinique
+  enregistrée à son nom.
+- Le critère de comparaison des doses IRM et sCT n'est pas arrêté : les deux options — écart
+  sur points DVH, indice gamma — ne mesurent pas la même chose et peuvent conclure
+  différemment. L'écran le dit plutôt que de choisir.
 - Le logo est un PNG détouré. Un SVG diviserait le poids par dix et resterait net à toute
   taille.
 

@@ -11,6 +11,8 @@
  * C'est ici que vit l'analyse — il n'y a plus d'écran séparé où la chercher.
  * ──────────────────────────────────────────────────────────────────────────── */
 
+import { useState } from 'react'
+import { motifsDeviation } from '../data'
 import { CONVENTION_AXES, fmt, fmtSigne, type Recommandation, type Voie } from '../logic'
 
 const NIVEAU_PASTILLE: Record<string, string> = {
@@ -31,9 +33,10 @@ interface Props {
   reco: Recommandation
   /** Voie déjà retenue pour cette séance, s'il y en a une. */
   decisionEnregistree?: Voie | null
-  /** Seul le radiothérapeute tranche (§2 du brief). */
+  /** Faux pour un profil qui consulte sans trancher. */
   peutDecider: boolean
-  onChoisir: (v: Voie) => void
+  /** Les motifs n'accompagnent que les décisions qui s'écartent de la proposition. */
+  onChoisir: (v: Voie, motifs?: string[], texte?: string) => void
   onFermer: () => void
 }
 
@@ -43,6 +46,19 @@ export default function DecisionModal({
   // Les arguments qui pèsent le plus se lisent en premier.
   const justifications = [...reco.justifications].sort((a, b) => b.poids - a.poids)
   const decalagesInhabituels = reco.decalages.filter(x => x.inhabituel)
+
+  // Voie choisie contre la proposition : on demande pourquoi avant d'enregistrer.
+  const [ecart, setEcart] = useState<Voie | null>(null)
+  const [motif, setMotif] = useState<string | null>(null)
+  const [texte, setTexte] = useState('')
+  const motifLibre = motif !== null && motif.startsWith('Autre')
+  const motifComplet = motif !== null && (!motifLibre || texte.trim().length > 0)
+
+  const choisir = (v: Voie) => {
+    // Suivre la proposition ne se justifie pas ; s'en écarter, si.
+    if (v === reco.voie) { onChoisir(v); return }
+    setEcart(v)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -144,11 +160,76 @@ export default function DecisionModal({
 
         {/* La décision reste sous les yeux : c'est l'action de la fenêtre, elle
             ne doit pas dépendre d'un défilement pour être atteinte. */}
-        <div className="px-6 py-4 border-t border-slate-100 shrink-0 bg-white">
+        <div className="px-6 py-4 border-t border-slate-100 shrink-0 bg-white max-h-[70vh] overflow-y-auto">
           {!peutDecider ? (
             <div className="bg-warn-bg border border-warn-border rounded-2xl px-4 py-3 text-sm text-warn-text">
               Votre profil ne permet pas de trancher : la décision ATP / ATS revient au
               radiothérapeute. Vous pouvez consulter l'analyse, pas la valider.
+            </div>
+          ) : ecart ? (
+            /* ── Pourquoi s'écarter : la question est posée, pas contournable ── */
+            <div>
+              <div className="text-sm font-bold text-slate-700">
+                {ecart} au lieu de {reco.voie} — pour quelle raison ?
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 mb-2.5">
+                S'écarter de la proposition est prévu. Le motif part au journal et au rapport,
+                il ne justifie pas la décision auprès de qui que ce soit — il la rend relisible.
+              </p>
+
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                {motifsDeviation.map(m => (
+                  <label
+                    key={m}
+                    className={`flex items-start gap-2.5 px-3 py-2 rounded-xl border cursor-pointer transition-colors ${
+                      motif === m
+                        ? 'bg-clinical-light border-clinical'
+                        : 'bg-white border-slate-200 hover:border-clinical/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="motif-deviation"
+                      checked={motif === m}
+                      onChange={() => setMotif(m)}
+                      className="mt-0.5 accent-clinical shrink-0"
+                    />
+                    <span className="text-xs text-slate-700 leading-snug">{m}</span>
+                  </label>
+                ))}
+              </div>
+
+              <textarea
+                value={texte}
+                onChange={e => setTexte(e.target.value)}
+                rows={2}
+                placeholder={motifLibre ? 'Préciser le motif…' : 'Précision libre — facultatif'}
+                className="mt-2 w-full text-sm rounded-2xl border border-slate-200 px-4 py-2.5 resize-none
+                  focus:outline-none focus:border-clinical"
+              />
+
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={() => onChoisir(ecart, motif ? [motif] : undefined, texte.trim() || undefined)}
+                  disabled={!motifComplet}
+                  className="px-4 py-2.5 rounded-2xl bg-clinical hover:bg-clinical-mid text-white text-sm
+                    font-bold transition-colors disabled:bg-slate-200 disabled:text-slate-400
+                    disabled:cursor-not-allowed"
+                >
+                  Enregistrer la décision {ecart}
+                </button>
+                <button
+                  onClick={() => { setEcart(null); setMotif(null) }}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Revenir aux deux voies
+                </button>
+                {!motifComplet && (
+                  <span className="ml-auto text-xs text-slate-400">
+                    {motif === null ? 'Choisir un motif' : 'Préciser le motif'}
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             <>
@@ -156,7 +237,7 @@ export default function DecisionModal({
                 {(['ATP', 'ATS'] as Voie[]).map(v => (
                   <button
                     key={v}
-                    onClick={() => onChoisir(v)}
+                    onClick={() => choisir(v)}
                     className={`group flex flex-col items-start px-4 py-3 rounded-2xl border-2 text-left transition-all ${
                       v === reco.voie
                         ? 'bg-clinical-light border-clinical hover:bg-clinical'
@@ -181,8 +262,8 @@ export default function DecisionModal({
                 ))}
               </div>
               <div className="text-xs text-slate-400 mt-2">
-                Choisir autre chose que la proposition est prévu : l'écart part au journal avec
-                son motif.
+                Choisir autre chose que la proposition est prévu : l'outil demande alors le
+                motif, et l'écart part au journal avec lui.
               </div>
             </>
           )}

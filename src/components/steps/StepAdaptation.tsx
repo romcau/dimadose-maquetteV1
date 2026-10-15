@@ -64,6 +64,13 @@ export default function StepAdaptation({ canUpload, onGoToReport }: Props) {
   // Contraintes effectivement retenues pour la séance (proposition ou saisie manuelle)
   const contraintes = d.propositions.filter(p => p.structure.type === 'oar')
 
+  // Le jeu retenu s'écarte-t-il encore du plan de référence ? Sans écart, le
+  // retour en bloc n'aurait rien à défaire.
+  const ecartAuxReferences = contraintes.some(
+    p => Math.abs(d.valeurContrainte(p.id) - p.valeurRef) > 1e-9
+      || Math.abs(d.valeurTolerance(p.id) - p.structure.toleranceRef) > 1e-9,
+  )
+
   /**
    * Copie du jeu de contraintes.
    *
@@ -287,13 +294,27 @@ export default function StepAdaptation({ canUpload, onGoToReport }: Props) {
                   {d.contraintesModifiees && ' · valeurs ajustées à la main'}
                 </div>
               </div>
-              <button
-                onClick={copierContraintes}
-                className="text-xs border px-3 py-1.5 rounded-xl font-semibold transition-all shrink-0
-                  border-clinical-border bg-clinical-light text-clinical hover:bg-clinical hover:text-white"
-              >
-                {copie ? 'Copié' : 'Copier le jeu'}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Revenir en bloc au plan de référence : l'ajustement est une
+                    proposition, et on doit pouvoir la refuser d'un geste. */}
+                {canUpload && ecartAuxReferences && (
+                  <button
+                    onClick={d.remettreAuxReferences}
+                    title="Rend à chaque structure la contrainte et la tolérance du plan de référence, et refuse les ajustements proposés"
+                    className="text-xs border border-slate-200 px-3 py-1.5 rounded-xl font-semibold
+                      text-slate-500 hover:border-clinical/40 hover:text-clinical transition-all"
+                  >
+                    Tout remettre aux contraintes de référence
+                  </button>
+                )}
+                <button
+                  onClick={copierContraintes}
+                  className="text-xs border px-3 py-1.5 rounded-xl font-semibold transition-all
+                    border-clinical-border bg-clinical-light text-clinical hover:bg-clinical hover:text-white"
+                >
+                  {copie ? 'Copié' : 'Copier le jeu'}
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">

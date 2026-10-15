@@ -614,9 +614,36 @@ export function DossierProvider({
     tracer({
       categorie: 'contrainte',
       seance: seanceCourante,
-      libelle: 'Toutes les contraintes remises aux contraintes de référence',
+      libelle: 'Toutes les contraintes remises aux propositions DIMADOSE',
     })
   }, [seanceCourante, tracer])
+
+  /**
+   * Refuser l'ajustement proposé, en bloc, et repartir du plan de référence.
+   *
+   * Ce n'est pas la même chose que revenir aux propositions : la proposition
+   * s'écarte volontairement de la référence pour tenir compte du cumul. Le
+   * geste existe parce que le jeu proposé reste une proposition — l'équipe
+   * doit pouvoir la refuser d'un seul mouvement, contraintes et tolérances
+   * comprises, et le journal n'en garde qu'une ligne.
+   */
+  const remettreAuxReferences = useCallback(() => {
+    const valeurs: Record<string, number> = {}
+    const tolerances: Record<string, number> = {}
+    for (const p of propositions) {
+      valeurs[p.id] = p.valeurRef
+      tolerances[p.id] = p.structure.toleranceRef
+    }
+    setContraintesEditees(prev => ({ ...prev, [seanceCourante]: valeurs }))
+    setTolerancesEditees(prev => ({ ...prev, [seanceCourante]: tolerances }))
+    tracer({
+      categorie: 'contrainte',
+      seance: seanceCourante,
+      libelle: 'Jeu complet remis aux contraintes du plan de référence',
+      detail: `${propositions.length} structure(s) · ajustements proposés par DIMADOSE refusés`,
+      ecart: true,
+    })
+  }, [seanceCourante, propositions, tracer])
 
   const valeur = useMemo<DossierContexte>(() => ({
     dossierId,
@@ -655,12 +682,14 @@ export function DossierProvider({
     editerTolerance,
     reinitialiserContrainte,
     reinitialiserContraintes,
+    remettreAuxReferences,
   }), [
     dossierId, utilisateur, droits, machine, identite, seanceCourante, decisions, critere, irmref,
     contraintesEditees, tolerancesEditees, valeurTolerance, trace, seances, seance, cumul, cumulJusqua, recommandation,
     propositions, valeurContrainte, contraintesModifiees, rapport, alertes,
     persistant, enregistreLe, reinitialiser, tracer, actions,
     editerContrainte, editerTolerance, reinitialiserContrainte, reinitialiserContraintes,
+    remettreAuxReferences,
   ])
 
   return <Contexte.Provider value={valeur}>{children}</Contexte.Provider>

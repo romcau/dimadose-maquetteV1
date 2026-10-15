@@ -124,6 +124,8 @@ export interface DossierContexte {
   editerTolerance: (structureId: string, valeur: number) => void
   reinitialiserContrainte: (structureId: string) => void
   reinitialiserContraintes: () => void
+  /** Refuse en bloc les ajustements proposés : retour aux valeurs du plan de référence. */
+  remettreAuxReferences: () => void
 }
 
 export const Contexte = createContext<DossierContexte | null>(null)
